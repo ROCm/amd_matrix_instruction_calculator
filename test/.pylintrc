@@ -1,0 +1,74 @@
+# Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+[MAIN]
+# Textual output with colorization is useful for quick analysis
+output-format=colorized
+# Save off pickle file of previous runs, to compare pylint improvements across changes
+persistent=yes
+# Full report generally shows too much extraneous info for easy pylinting before commit
+reports=no
+# Give the current pylint default of this explicitly, in case pylint changes their default
+evaluation=10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)
+
+[DISABLES]
+# Disable various "too-many" checks. The AMD Matrix Instruction Calculator is OK with
+# relatively large functions with some complex branches, many local variables, and
+# some complex nesting. This is not universally good software engineering pratice,
+# but this makes some of the code (such as loops handling multi-dimensional matrix
+# unrolling) more natural.
+disable=too-many-arguments,
+        too-many-branches,
+        too-many-locals,
+        too-many-lines,
+        too-many-nested-blocks,
+        too-many-public-methods,
+        too-many-statements
+
+[VARIABLES]
+# Use the variable '_' for dummies
+good-names=_
+dummy-variables-rgx=^\*{0,2}(_$|unused_|dummy_)
+
+# argument names should be snake-case, or single-character all-caps names, which we use for
+# things like matrix dimension names (e.g., M, N, K)
+argument-rgx=^([a-z][a-z0-9_]*|[A-Z])$
+# constant names could be any of CONST, _CONST, __const__, const, or _const
+const-rgx=^(_?[A-Z][A-Z0-9_]*|__[a-z0-9_]+__|_?[a-z][a-z0-9_]*)$
+# Function names can be either CamelCase or snake_case
+function-rgx=^(?:([A-z][a-zA-z0-0]*)|([a-z][a-z0-9_]*))$
+# Variable names should be snake_case and lower-case, except for single-character all-caps
+# names, which we use for things like matrix dimension names (e.g., M, N, K)
+variable-rgx=^([a-z][a-z0-9_]*|[A-Z])$
+no-docstring-rgx=(__.*__|main)$
+
+[STATEMENTS]
+max-line-length=100
+single-line-if-stmt=yes
+max-module-lines=99999
+indent-string='    '
+indent-after-paren=4
+expected-line-ending-format=
+notes=TODO,FIXME,XXX
+check-quote-consistency=no
+min-similarity-lines=4
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=no
+defining-attr-methods=__init__
