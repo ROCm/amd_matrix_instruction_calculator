@@ -1368,14 +1368,16 @@ This section is meant to contains a list of as many of these documents as possib
         * Public ISA Guide for AMD Radeon&trade; GPUs using the RNDA3 ISA
 * AMD Blog Posts
     * <https://gpuopen.com/learn/amd-lab-notes/amd-lab-notes-matrix-cores-README/>
-        * AMD Lab Notes on AMD Matrix Cores, which covers the use of MFMA instructions on CDNA 1 and CDNA 2 accelerators
+        * AMD lab notes on AMD Matrix Cores, which covers the use of MFMA instructions on CDNA 1 and CDNA 2 accelerators
     * <https://gpuopen.com/learn/wmma_on_rdna3/>
         * "How to accelerate AI applications on RDNA 3 using WMMA", which covers the use of WMMA instructions on RDNA3 GPUs
 * AMD Matrix Code Repositories
     * <https://github.com/amd/amd-lab-notes/tree/release/matrix-cores>
-        * Code for examples that go along with the AMD Lab Notes blog post. This code demonstrates how to arrange data and execute various MFMA instructions.
+        * Code for examples that go along with the AMD lab notes blog post
+        * This code demonstrates how to arrange data and execute various MFMA instructions
     * <https://github.com/ROCmSoftwarePlatform/rocWMMA>
-        * rocWMMA is a C++ library that provides application-level access to MFMA and WMMA instructions without requiring users to write low-level assembly or compiler intrinsics. This is the recommended path for developers to access these matrix acceleration instructions in the majority of cases.
+        * A C++ library that provides application-level access to MFMA and WMMA instructions without requiring users to write low-level assembly or compiler intrinsics
+        * This library is the recommended path for developers to access these matrix acceleration instructions in the majority of cases
 
 Trademark Attribution
 -------------------------------------------------------------------------------------
