@@ -60,7 +60,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.0"
+VERSION = "1.01"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -83,6 +83,56 @@ dict_isas = {
     'gfx1103'          : 'rdna3',
 }
 
+class MatrixNumericalType(TypedDict):
+    """ Typed dictionary that defines numerical types used in matrix multiply instructions
+
+    A typed dictionary container for the numerical types used in matrix multiply instructions.
+    Data types have short-string identifiers, sizes in bits, and some strings describing the
+    type. This container helps us go from the encoding to that data.
+
+    Attributes:
+        size: size of the type, in bits
+        description: a string describing this number when used as a matrix input or output
+    """
+    size: int
+    description: str
+
+# Dictionary for claculating the size of particular data types
+dict_math_types: Dict[str, MatrixNumericalType] = {
+    'fp64': {
+        'size': 64,
+        'description': 'FP64 (IEEE binary64 floating point)',
+    },
+    'fp32': {
+        'size': 32,
+        'description': 'FP32 (IEEE binary32 floating point)',
+    },
+    'fp16': {
+        'size': 16,
+        'description': 'FP16 (IEEE binary16 floating point)',
+    },
+    'bf16': {
+        'size': 16,
+        'description': 'BF16 (Brain floating point)',
+    },
+    'int32': {
+        'size': 32,
+        'description': 'int32 (Signed 32-bit integer)',
+    },
+    'int8': {
+        'size': 8,
+        'description': 'int8 (Signed 8-bit integer)',
+    },
+    'iu8': {
+        'size': 8,
+        'description': 'IU8 (Signed/unsigned 8-bit integer)',
+    },
+    'iu4': {
+        'size': 4,
+        'description': 'IU4 (Signed/unsigned 4-bit integer)',
+    }
+}
+
 
 class MatrixInstruction(TypedDict):
     """ Typed dictionary that defines a matrix multiply instruction
@@ -95,10 +145,10 @@ class MatrixInstruction(TypedDict):
     Attributes:
         arch: a string to identify the accelerator architecture which can execute this instruction
         opcode: an integer opcode of this instruction within the VOP3P format
-        in_bytes: a float that defines each matrix entry's input size, in bytes
-            This is a float, because values that are <8 bits do not take up a whole byte.
-        out_bytes: afloat that defines each matrix entry's output size, in bytes
-            This is a float, because values that are <8 bits do not take up a whole byte.
+        in_type: a string that defines the data type of the matrix entry in the Src0 register,
+            used as a key for the dict_math_types dictionary
+        out_type: a string that defines each matrix entry's output data type, used as a key for
+            the dict_math_types dictionary
         m: an integer that defines the M dimension of the matrix multiplication
         n: an integer that defines the N dimension of the matrix multiplication
         k: an integer that defines the K dimension of the matrix multiplication
@@ -117,8 +167,8 @@ class MatrixInstruction(TypedDict):
     """
     arch: str
     opcode: int
-    in_bytes: float
-    out_bytes: float
+    in_type: str
+    out_type: str
     m: int
     n: int
     k: int
@@ -146,8 +196,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x1f32': {
             'arch': 'cdna1',
             'opcode': 64,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 1,
@@ -166,8 +216,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x1f32': {
             'arch': 'cdna1',
             'opcode': 65,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 1,
@@ -186,8 +236,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_4x4x1f32': {
             'arch': 'cdna1',
             'opcode': 66,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 4,
             'n': 4,
             'k': 1,
@@ -206,8 +256,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x2f32': {
             'arch': 'cdna1',
             'opcode': 68,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 2,
@@ -226,8 +276,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x4f32': {
             'arch': 'cdna1',
             'opcode': 69,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -246,8 +296,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x4f16': {
             'arch': 'cdna1',
             'opcode': 72,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 4,
@@ -266,8 +316,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x4f16': {
             'arch': 'cdna1',
             'opcode': 73,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -286,8 +336,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_4x4x4f16': {
             'arch': 'cdna1',
             'opcode': 74,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 4,
             'n': 4,
             'k': 4,
@@ -306,8 +356,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x8f16': {
             'arch': 'cdna1',
             'opcode': 76,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 8,
@@ -326,8 +376,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x16f16': {
             'arch': 'cdna1',
             'opcode': 77,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -346,8 +396,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_32x32x4i8': {
             'arch': 'cdna1',
             'opcode': 80,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 32,
             'n': 32,
             'k': 4,
@@ -366,8 +416,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_16x16x4i8': {
             'arch': 'cdna1',
             'opcode': 81,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -386,8 +436,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_4x4x4i8': {
             'arch': 'cdna1',
             'opcode': 82,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 4,
             'n': 4,
             'k': 4,
@@ -406,8 +456,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_32x32x8i8': {
             'arch': 'cdna1',
             'opcode': 84,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 32,
             'n': 32,
             'k': 8,
@@ -426,8 +476,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_16x16x16i8': {
             'arch': 'cdna1',
             'opcode': 84,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -446,8 +496,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x2bf16': {
             'arch': 'cdna1',
             'opcode': 104,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 2,
@@ -466,8 +516,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x2bf16': {
             'arch': 'cdna1',
             'opcode': 105,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 2,
@@ -486,8 +536,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_4x4x2bf16': {
             'arch': 'cdna1',
             'opcode': 107,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 4,
             'n': 4,
             'k': 2,
@@ -506,8 +556,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x4bf16': {
             'arch': 'cdna1',
             'opcode': 108,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 4,
@@ -526,8 +576,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x8bf16': {
             'arch': 'cdna1',
             'opcode': 109,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 8,
@@ -548,8 +598,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x1f32': {
             'arch': 'cdna2',
             'opcode': 64,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 1,
@@ -568,8 +618,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x1f32': {
             'arch': 'cdna2',
             'opcode': 65,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 1,
@@ -588,8 +638,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_4x4x1f32': {
             'arch': 'cdna2',
             'opcode': 66,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 4,
             'n': 4,
             'k': 1,
@@ -608,8 +658,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x2f32': {
             'arch': 'cdna2',
             'opcode': 68,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 2,
@@ -628,8 +678,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x4f32': {
             'arch': 'cdna2',
             'opcode': 69,
-            'in_bytes': 4,
-            'out_bytes': 4,
+            'in_type': 'fp32',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -648,8 +698,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x4f16': {
             'arch': 'cdna2',
             'opcode': 72,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 4,
@@ -668,8 +718,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x4f16': {
             'arch': 'cdna2',
             'opcode': 73,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -688,8 +738,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_4x4x4f16': {
             'arch': 'cdna2',
             'opcode': 74,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 4,
             'n': 4,
             'k': 4,
@@ -708,8 +758,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x8f16': {
             'arch': 'cdna2',
             'opcode': 76,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 8,
@@ -728,8 +778,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x16f16': {
             'arch': 'cdna2',
             'opcode': 77,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -748,8 +798,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_32x32x4i8': {
             'arch': 'cdna2',
             'opcode': 80,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 32,
             'n': 32,
             'k': 4,
@@ -768,8 +818,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_16x16x4i8': {
             'arch': 'cdna2',
             'opcode': 81,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -788,8 +838,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_4x4x4i8': {
             'arch': 'cdna2',
             'opcode': 82,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 4,
             'n': 4,
             'k': 4,
@@ -808,8 +858,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_32x32x8i8': {
             'arch': 'cdna2',
             'opcode': 84,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 32,
             'n': 32,
             'k': 8,
@@ -828,8 +878,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_i32_16x16x16i8': {
             'arch': 'cdna2',
             'opcode': 84,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'int8',
+            'out_type': 'int32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -848,8 +898,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x4bf16_1k': {
             'arch': 'cdna2',
             'opcode': 99,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 4,
@@ -868,8 +918,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x4bf16_1k': {
             'arch': 'cdna2',
             'opcode': 100,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -888,8 +938,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_4x4x4bf16_1k': {
             'arch': 'cdna2',
             'opcode': 101,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 4,
             'n': 4,
             'k': 4,
@@ -908,8 +958,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x8bf16_1k': {
             'arch': 'cdna2',
             'opcode': 102,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 8,
@@ -928,8 +978,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x16bf16_1k': {
             'arch': 'cdna2',
             'opcode': 103,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -948,8 +998,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x2bf16': {
             'arch': 'cdna2',
             'opcode': 104,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 2,
@@ -968,8 +1018,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x2bf16': {
             'arch': 'cdna2',
             'opcode': 105,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 2,
@@ -988,8 +1038,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_4x4x2bf16': {
             'arch': 'cdna2',
             'opcode': 107,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 4,
             'n': 4,
             'k': 2,
@@ -1008,8 +1058,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x4bf16': {
             'arch': 'cdna2',
             'opcode': 108,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 32,
             'n': 32,
             'k': 4,
@@ -1028,8 +1078,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x8bf16': {
             'arch': 'cdna2',
             'opcode': 109,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 8,
@@ -1048,8 +1098,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f64_16x16x4f64': {
             'arch': 'cdna2',
             'opcode': 110,
-            'in_bytes': 8,
-            'out_bytes': 8,
+            'in_type': 'fp64',
+            'out_type': 'fp64',
             'm': 16,
             'n': 16,
             'k': 4,
@@ -1068,8 +1118,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f64_4x4x4f64': {
             'arch': 'cdna2',
             'opcode': 111,
-            'in_bytes': 8,
-            'out_bytes': 8,
+            'in_type': 'fp64',
+            'out_type': 'fp64',
             'm': 4,
             'n': 4,
             'k': 4,
@@ -1090,8 +1140,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_wmma_f32_16x16x16_f16': {
             'arch': 'rdna3',
             'opcode': 64,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'fp16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -1110,8 +1160,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_wmma_f32_16x16x16_bf16': {
             'arch': 'rdna3',
             'opcode': 65,
-            'in_bytes': 2,
-            'out_bytes': 4,
+            'in_type': 'bf16',
+            'out_type': 'fp32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -1130,8 +1180,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_wmma_f16_16x16x16_f16': {
             'arch': 'rdna3',
             'opcode': 66,
-            'in_bytes': 2,
-            'out_bytes': 2,
+            'in_type': 'fp16',
+            'out_type': 'fp16',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -1150,8 +1200,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_wmma_bf16_16x16x16_bf16': {
             'arch': 'rdna3',
             'opcode': 67,
-            'in_bytes': 2,
-            'out_bytes': 2,
+            'in_type': 'bf16',
+            'out_type': 'bf16',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -1170,8 +1220,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_wmma_i32_16x16x16_iu8': {
             'arch': 'rdna3',
             'opcode': 68,
-            'in_bytes': 1,
-            'out_bytes': 4,
+            'in_type': 'iu8',
+            'out_type': 'int32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -1190,8 +1240,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_wmma_i32_16x16x16_iu4': {
             'arch': 'rdna3',
             'opcode': 69,
-            'in_bytes': 0.5,
-            'out_bytes': 4,
+            'in_type': 'iu4',
+            'out_type': 'int32',
             'm': 16,
             'n': 16,
             'k': 16,
@@ -1254,6 +1304,28 @@ def print_arch_inst(arch: str, inst_name: str) -> None:
     """
     print(f"Architecture: {arch.upper()}")
     print(f"Instruction: {inst_name.upper()}", flush=True)
+
+def get_data_size(data_type: str) -> int:
+    """ Returns the size of a data type, in bits
+
+    Args:
+        data_type: string that contains the data type, from the dict_math_types dictionary keys
+
+    Returns:
+        An integer value that describes the size of one unit of the data type, in bits
+    """
+    return dict_math_types[data_type]['size']
+
+def get_type_desc(data_type: str) -> str:
+    """ Returns the pretty print string that describes a data type
+
+    Args:
+        data_type: string that contains the data type, from the dict_math_types dictionary keys
+
+    Returns:
+        A string that describes the data type in a form that can be printed to the screen
+    """
+    return dict_math_types[data_type]['description']
 
 # Disabling the check for too many returns in this function, because we have a large
 # number of possible times we want to return on error. Rather than refactor this into
@@ -1772,7 +1844,7 @@ class InstCalc(metaclass=ABCMeta):
         return ret_str
 
     @staticmethod
-    def _get_reg_name(data_size: float, regno: int) -> str:
+    def _get_reg_name(data_size: int, regno: int) -> str:
         """ Calculates the register name and formats it as Va.c.
 
         Calculates the register name (but not lane) based on a regno. Formats it in Va.c
@@ -1783,8 +1855,7 @@ class InstCalc(metaclass=ABCMeta):
         within the first 4-byte register.
 
         Args:
-            data_size: float holding the size of this regno's data, in bytes.
-                Data types <8 bits (e.g. 4b integers) will be fractional.
+            data_size: integer holding the size of this regno's data, in bits.
             regno: integer that holds the 'regno' (register storage location) that this
                 function will transform into a VGPR number and name.
 
@@ -1799,20 +1870,20 @@ class InstCalc(metaclass=ABCMeta):
                 e.g., when accessing the bottom half of a register, it would be .[15:0]
         """
         this_str = "v"
-        if data_size == 4:
+        if data_size == 32:
             this_str += (str(regno))
-        elif data_size == 8:
+        elif data_size == 64:
             this_str += "[" + (str(regno * 2 + 1) + ":")
             this_str += (str(regno * 2) + "]")
-        elif data_size == 2:
+        elif data_size == 16:
             this_str += (str(int(regno / 2)))
             bitno = regno % 2
             this_str += f".[{16 * bitno + 15}:{16 * bitno}]"
-        elif data_size == 1:
+        elif data_size == 8:
             this_str += (str(int(regno / 4)))
             bitno = regno % 4
             this_str += f".[{8 * bitno + 7}:{8 * bitno}]"
-        elif data_size == 0.5:
+        elif data_size == 4:
             this_str += (str(int(regno / 8)))
             bitno = regno % 8
             this_str += f".[{bitno * 4 + 3}:{bitno * 4}]"
@@ -1847,7 +1918,7 @@ class InstCalc(metaclass=ABCMeta):
         return full_name
 
     @staticmethod
-    def _get_elements_per_gpr(data_size: float) -> float:
+    def _get_elements_per_gpr(data_size: int) -> float:
         """ Calculates how many elements of a matrix value fit in each register.
 
         Returns how many elements of the matrix (each element of size data_size)
@@ -1855,8 +1926,7 @@ class InstCalc(metaclass=ABCMeta):
         question is "how many elements will fit into a 4B register."
 
         Args:
-            data_size: float holding the size of the requested data, in bytes.
-                Some data types (e.g. 4b data) can be in fractional bytes.
+            data_size: integer holding the size of the requested data, in bits.
 
         Returns:
             A floating-point value that holds how many matrix values will fit into a 4B VGPR.
@@ -1864,7 +1934,7 @@ class InstCalc(metaclass=ABCMeta):
             be a fraction <1, which indicates multiple registers are needed to hold a single
             value.
         """
-        reg_size = 4
+        reg_size = 32
         # 1B values fit four units of data per register (0.25 registers per data)
         # 2B values fit two units of data per register (0.5 registers per data)
         # 4B values need one register per unit of data
@@ -2369,8 +2439,8 @@ class InstCalc(metaclass=ABCMeta):
             ValueError: An i/j/k/block coordinate was not valid for this instruction
         """
         inst_info = self.inst_info
-        in_bytes = inst_info['in_bytes']
-        out_bytes = inst_info['out_bytes']
+        in_type = inst_info['in_type']
+        out_type = inst_info['out_type']
 
         orig_cbsz = cbsz
         orig_abid = abid
@@ -2403,16 +2473,16 @@ class InstCalc(metaclass=ABCMeta):
         # by a matrix requires knowing how many elements of the matrix we
         # can fit in a VGPR.
         if matrix in ('a', 'b'):
-            data_size = in_bytes
+            data_size = get_data_size(in_type)
             if matrix == 'a':
-                gpr_ratio = self._get_elements_per_gpr(in_bytes)
+                gpr_ratio = self._get_elements_per_gpr(data_size)
                 total_gprs = self._get_instruction_num_gprs(matrix)
             else:
-                gpr_ratio = self._get_elements_per_gpr(in_bytes)
+                gpr_ratio = self._get_elements_per_gpr(data_size)
                 total_gprs = self._get_instruction_num_gprs(matrix)
         else:
-            data_size = out_bytes
-            gpr_ratio = self._get_elements_per_gpr(out_bytes)
+            data_size = get_data_size(out_type)
+            gpr_ratio = self._get_elements_per_gpr(data_size)
             total_gprs = self._get_instruction_num_gprs(matrix)
 
         if reg >= total_gprs:
@@ -2699,20 +2769,20 @@ class InstCalc(metaclass=ABCMeta):
         N = inst_info['n']
         K = inst_info['k']
         B = inst_info['blocks']
-        in_bytes = inst_info['in_bytes']
-        out_bytes = inst_info['out_bytes']
+        in_type = inst_info['in_type']
+        out_type = inst_info['out_type']
         join_char = self.__get_join_char(requested_output)
 
         register_dict = self.__create_register_dict(matrix, cbsz, abid, blgp, opsel)
 
         if matrix == 'a':
-            data_size = in_bytes
+            data_size = get_data_size(in_type)
             total_gpr_slots = int(M * K * B / contig_values)
         elif matrix == 'b':
-            data_size = in_bytes
+            data_size = get_data_size(in_type)
             total_gpr_slots = int(N * K * B / contig_values)
         else:
-            data_size = out_bytes
+            data_size = get_data_size(out_type)
             total_gpr_slots = int(M * N * B / contig_values)
 
         header = ["lane"]
@@ -2759,7 +2829,7 @@ class InstCalc(metaclass=ABCMeta):
         print(self.__format_output_table(table_to_print, requested_output))
 
     def _get_instruction_num_gprs(self, matrix: str, in_lanes: Optional[int] = None,
-                                  out_bytes: Optional[float] = None) -> int:
+                                  out_size: Optional[int] = None) -> int:
         """ Calculates the number of GPRs needed to hold a matrix.
 
         Args:
@@ -2768,11 +2838,11 @@ class InstCalc(metaclass=ABCMeta):
             in_lanes: an integer that defines the number of contiguous lanes are used to hold
                 values of a matrix. If this is not passed in, the argument is matched to the
                 wavefront size of the target architecture.
-            out_bytes: The number of bytes used to hold output values for this instruction.
-                For instance: some devices may store 2B values into either the low or high
-                half of a 4B output register. These architectures would need out_bytes=4.
+            out_size: The number of bits used to hold output values for this instruction.
+                For instance: some devices may store 16b values into either the low or high
+                half of a 32b output register. These architectures would need out_size=32.
                 If this is not passed in, the argument is matched to the actual instruction's
-                output data size (e.g. 2B in this example case).
+                output data size (e.g. 16b in this example case).
 
         Returns:
             An integer that defines the number of GPRs needed to hold the requested matrix
@@ -2780,14 +2850,14 @@ class InstCalc(metaclass=ABCMeta):
         inst_info = self.inst_info
         if in_lanes is None:
             in_lanes = 64
-        if out_bytes is None:
-            out_bytes = self.inst_info['out_bytes']
         if matrix in ('a', 'b'):
             lanes_used = int(in_lanes)
-            gpr_ratio = self._get_elements_per_gpr(inst_info['in_bytes'])
+            gpr_ratio = self._get_elements_per_gpr(get_data_size(inst_info['in_type']))
         else:
+            if out_size is None:
+                out_size = get_data_size(self.inst_info['out_type'])
             lanes_used = int(self.wave_width)
-            gpr_ratio = self._get_elements_per_gpr(out_bytes)
+            gpr_ratio = self._get_elements_per_gpr(out_size)
         if matrix in ('a', 'c', 'd'):
             rows = inst_info['m']
         else:
@@ -3155,6 +3225,18 @@ class InstCalc(metaclass=ABCMeta):
             print(f"        GPRs required for D: {total_out_gprs}")
             print(f"        GPR alignment requirement: {inst_info['gpr_byte_align']} bytes")
 
+    def _print_register_types(self) -> None:
+        """ Prints the data type for the registers used in this matrix instruction.
+
+        Prints the type that this instruction will use to interpret the data held in
+        each of the registers used by this instruction.
+        """
+        print("    Register data types:")
+        print(f"        Src0: {get_type_desc(self.inst_info['in_type'])}")
+        print(f"        Src1: {get_type_desc(self.inst_info['in_type'])}")
+        print(f"        Src2: {get_type_desc(self.inst_info['out_type'])}")
+        print(f"        Vdst: {get_type_desc(self.inst_info['out_type'])}")
+
     def _print_register_info(self, encoding_name: str = "Unknown") -> None:
         """ Prints the encoding and register information for a matrix instruction.
 
@@ -3174,6 +3256,7 @@ class InstCalc(metaclass=ABCMeta):
         print("        B matrix source field: Src1")
         print("        C matrix source field: Src2")
         print("        D matrix source field: Vdst")
+        self._print_register_types()
 
     def print_instruction_information(self) -> None:
         """ Prints full information about the desired instruction on the target architecture. """
@@ -3245,10 +3328,9 @@ class InstCalcGfx9(InstCalc):
                 For B matrices this is the desired column
             j: integer location within the input matrix's "inner" dimension
                 For A matrices, this is the desired column
-                For B matrices, thsi is the desired row
+                For B matrices, this is the desired row
             b: integer block number within the input matrix
-            data_size: integer size of the input data, in bytes. On gfx9, this is an integer
-                because there is no <1B inputs data.
+            data_size: integer size of the input data, in bits
             blgp: integer value of the instruction's BLGP modifier
 
         Returns:
@@ -3312,8 +3394,7 @@ class InstCalcGfx9(InstCalc):
             i: integer location within the output matrix's rows
             j: integer location within the output matrix's columns
             b: integer block number within the output matrix
-            data_size: integer size of the output data, in bytes. On gfx9, this is an integer
-                because there is no <1B output data.
+            data_size: integer size of the output data, in bits
 
         Returns:
             Based on the matrix and requested coordinates, return two things in a tuple:
@@ -3330,7 +3411,7 @@ class InstCalcGfx9(InstCalc):
         # When this register is full, move down 4 registers and start again.
         # 64b outputs are a similar algorithm, but the output is only 1 row (register-pair) tall.
         multirows_per_register = int(64/N)
-        if data_size == 8:
+        if data_size == 64:
             multirow_height = 1
         else:
             multirow_height = 4
@@ -3401,9 +3482,9 @@ class InstCalcGfx9(InstCalc):
         B = inst_info['blocks']
         # Leave these as false out here, in case we are checking against matrix B
         if matrix in ('a', 'b'):
-            size = int(inst_info['in_bytes'])
+            size = get_data_size(inst_info['in_type'])
         else:
-            size = int(inst_info['out_bytes'])
+            size = get_data_size(inst_info['out_type'])
         if matrix == 'a':
             post_cbsz_abid_block = self._get_cbsz_abid_transformed_block(block, cbsz, abid)
             (reg, lanes) = self.__get_input_reg_lanes(M, K, B, i, k,
@@ -3420,7 +3501,7 @@ class InstCalcGfx9(InstCalc):
         return (element_name, reg, lanes)
 
     def _get_instruction_num_gprs(self, matrix: str, in_lanes: Optional[int] = 64,
-                                  out_bytes: Optional[float] = None) -> int:
+                                  out_size: Optional[int] = None) -> int:
         """ Calculates the number of GPRs needed to hold a matrix.
 
         Args:
@@ -3429,20 +3510,20 @@ class InstCalcGfx9(InstCalc):
             in_lanes: an integer that defines the number of contiguous lanes are used to hold
                 values of a matrix. On gfx9, this is always 64, so the default of this
                 argument is 64.
-            out_bytes: The number of bytes used to hold output values for this instruction.
-                For instance: some devices may store 2B values into either the low or high
-                half of a 4B output register. Some gfx9 architectures allow 8B outputs (e.g,
+            out_size: The number of bits used to hold output values for this instruction.
+                For instance: some devices may store 16b values into either the low or high
+                half of a 32b output register. Some gfx9 architectures allow 64b outputs (e.g,
                 for F64 calculations). If this argument is not passed in, the function
-                will initialize the value to the instruction's out_bytes attribute.
+                will initialize the value to the instruction's out_type attribute.
 
         Returns:
             An integer that defines the number of GPRs needed to hold the requested matrix
         """
-        # On gfx9, we always use all 64 lanes for input calculations, but output byte sizes
+        # On gfx9, we always use all 64 lanes for input calculations, but output sizes
         # can change for 64b outputs
-        if out_bytes is None:
-            out_bytes = self.inst_info['out_bytes']
-        return super()._get_instruction_num_gprs(matrix, in_lanes, out_bytes)
+        if out_size is None:
+            out_size = get_data_size(self.inst_info['out_type'])
+        return super()._get_instruction_num_gprs(matrix, in_lanes, out_size)
 
     def _coord_to_input_reg_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
@@ -3459,38 +3540,38 @@ class InstCalcGfx9(InstCalc):
             String that contains the simple formula mapping coordinates to input registers
         """
         inst_info = self.inst_info
-        in_bytes = inst_info['in_bytes']
+        in_size = get_data_size(inst_info['in_type'])
         K = inst_info['k']
         num_gprs = self._get_instruction_num_gprs(matrix)
 
         ret_string = "Unknown"
         # We do not need a sub-register, so no reason to print anything but reg 0
-        if (in_bytes == 4 and num_gprs == 1):
+        if (in_size == 32 and num_gprs == 1):
             ret_string = '0'
-        elif in_bytes == 8:
+        elif in_size == 64:
             ret_string = '[1:0]'
-        elif (in_bytes == 4 and num_gprs == 2):
+        elif (in_size == 32 and num_gprs == 2):
             ret_string = '(k % 2)'
         elif num_gprs == 1:
-            if (in_bytes == 2 and K == 2):
+            if (in_size == 16 and K == 2):
                 ret_string = '0.[16*k+15 : 16*k]'
-            elif (in_bytes == 2 and K >= 4):
+            elif (in_size == 16 and K >= 4):
                 ret_string = '0.[16*(k % 2)+15 : 16*(k % 2)]'
-            elif (in_bytes == 1 and K <= 4):
+            elif (in_size == 8 and K <= 4):
                 ret_string = '0.[8*k+7 : 8*k]'
-            elif (in_bytes == 1 and K > 4):
+            elif (in_size == 8 and K > 4):
                 ret_string = '0.[8*(k % 4)+7 : 8*(k % 4)]'
         elif num_gprs == 2:
-            if (in_bytes == 2 and K <= 4):
+            if (in_size == 16 and K <= 4):
                 ret_string = 'floor(k / 2).[16*(k % 2)+15 : 16*(k % 2)]'
-            elif (in_bytes == 2 and K <= 16):
+            elif (in_size == 16 and K <= 16):
                 ret_string = '(floor(k / 2) % 2).[16*(k % 2)+15 : 16*(k % 2)]'
-            elif in_bytes == 1:
+            elif in_size == 8:
                 ret_string = '(floor(k / 4) % 2).[8*(k % 4)+7 : 8*(k % 4)]'
         else:
-            if in_bytes == 2:
+            if in_size == 16:
                 ret_string = '(k % 4).[16*(k % 2)+15 : 16*(k % 2)]'
-            elif in_bytes == 1:
+            elif in_size == 8:
                 ret_string = '(floor(k / 4) % 4).[8*(k % 4)+7 : 8*(k % 4)]'
         return ret_string
 
@@ -3505,13 +3586,13 @@ class InstCalcGfx9(InstCalc):
             String that contains the simple formula mapping coordinates to output registers
         """
         inst_info = self.inst_info
-        out_bytes = inst_info['out_bytes']
+        out_type = inst_info['out_type']
         M = inst_info['m']
         N = inst_info['n']
         blocks = inst_info['blocks']
 
         ret_string = "Unknown"
-        if out_bytes == 8:
+        if out_type == 'fp64':
             if blocks == 1:
                 ret_string = '[2*floor(i / 4)+1 : 2*floor(i / 4)]'
             elif blocks == 4:
@@ -3546,7 +3627,7 @@ class InstCalcGfx9(InstCalc):
             String that contains the simple formula mapping coordinates to lanes
         """
         inst_info = self.inst_info
-        out_bytes = inst_info['out_bytes']
+        out_type = inst_info['out_type']
         M = inst_info['m']
         N = inst_info['n']
         K = inst_info['k']
@@ -3571,7 +3652,7 @@ class InstCalcGfx9(InstCalc):
                 ret_string += 'j'
         else: # c or d
             ret_string = ""
-            if out_bytes != 8:
+            if out_type != 'fp64':
                 if int((N * M) / 4) > 64:
                     ret_string += f"({N} * floor(i / 4)) % 64 + "
                 elif int((N * M) / 4) == 64:
@@ -3617,9 +3698,9 @@ class InstCalcGfx9(InstCalc):
         if matrix not in ('a', 'b'):
             inst_info = self.inst_info
             M = inst_info['m']
-            size = inst_info['out_bytes']
+            out_type = inst_info['out_type']
             ret_string = ""
-            if size != 8:
+            if out_type != 'fp64':
                 if M > 16:
                     ret_string += "(8 * floor(GPR_num / 4) % 32) + "
                 if M != 4:
@@ -3651,12 +3732,13 @@ class InstCalcGfx9(InstCalc):
         """
         inst_info = self.inst_info
         in_gprs = self._get_instruction_num_gprs(matrix)
-        data_size = inst_info['in_bytes']
+        data_type = inst_info['in_type']
+        data_size = get_data_size(data_type)
         ret_string = ""
         k_per_register = int(self._get_elements_per_gpr(data_size))
         if inst_info['k'] == 1:
             ret_string = "0"
-        elif data_size == 8:
+        elif data_type == 'fp64':
             ret_string = 'floor(lane / 16)'
         else:
             k_per_lane_skip = k_per_register * in_gprs
@@ -3669,7 +3751,7 @@ class InstCalcGfx9(InstCalc):
                     ret_string += " + "
                 if in_gprs > 1:
                     ret_string += f"{k_per_register} * GPR_num + "
-                ret_string += f"floor(GPR_bits / {8 * data_size})"
+                ret_string += f"floor(GPR_bits / {data_size})"
             elif in_gprs > 1:
                 ret_string += " + GPR_num"
         return ret_string
@@ -3753,7 +3835,7 @@ class InstCalcGfx9(InstCalc):
             ret_string = "0"
         else:
             ret_string = f"floor(lane / {inst_info['m']})"
-            if inst_info['in_bytes'] == 8:
+            if inst_info['in_type'] == 'fp64':
                 ret_string = f"({ret_string} % 4)"
         return ret_string
 
@@ -3782,7 +3864,7 @@ class InstCalcGfx9(InstCalc):
                 ret_string = f"floor(lane / {inst_info['m']})"
             else:
                 ret_string = f"floor(GPR_num / {gpr_per_block})"
-            if inst_info['out_bytes'] == 8:
+            if inst_info['out_type'] == 'fp64':
                 ret_string = f"({ret_string} % 4)"
         return ret_string
 
@@ -3879,7 +3961,7 @@ class InstCalcGfx11(InstCalc):
         del b_lanes # Unused in gfx11
         return a_lane
 
-    def __get_input_reg_lanes(self, i: int, k: int, data_size: float) -> Tuple[str, List[int]]:
+    def __get_input_reg_lanes(self, i: int, k: int, data_size: int) -> Tuple[str, List[int]]:
         """ Calculates a matrix's input register and lane number based on coordinates.
 
         For gfx11, calculates the input register and the lanes within that register
@@ -3891,9 +3973,8 @@ class InstCalcGfx11(InstCalc):
                 For B matrices this is the desired column
             k: integer location within the input matrix's "inner" dimension
                 For A matrices, this is the desired column
-                For B matrices, thsi is the desired row
-            data_size: integer size of the input data, in bytes. On gfx1, this is an float
-                because some inputs are 4 bits, i.e. 0.5B.
+                For B matrices, this is the desired row
+            data_size: integer size of the input data, in bits
 
         Returns:
             Based on the matrix and requested coordinates, return two things in a tuple:
@@ -3929,8 +4010,7 @@ class InstCalcGfx11(InstCalc):
             N: integer width of the output matrix, in matrix entries
             i: integer location within the output matrix's rows
             j: integer location within the output matrix's columns
-            data_size: float size of the output data, in bytes. On gfx11, this is an integer
-                because there is no <1B output data.
+            data_size: integer size of the output data, in bits
             opsel: integer value of the instruction's OPSEL modifier
 
         Returns:
@@ -3943,7 +4023,7 @@ class InstCalcGfx11(InstCalc):
         # When the output is 16b, we only write into the lower or upper half of
         # a register, so we need to "skip" the other half of the register slots
         rows_per_reg_slot = self.wave_width / 16
-        skip_half = 2 if data_size == 2 else 1
+        skip_half = 2 if data_size == 16 else 1
         regno = int(skip_half * int(i / rows_per_reg_slot)) + (opsel>>2)
         reg = self._get_reg_name(data_size, regno)
 
@@ -3990,9 +4070,9 @@ class InstCalcGfx11(InstCalc):
         N = inst_info['n']
 
         if matrix in ('a', 'b'):
-            size = inst_info['in_bytes']
+            size = get_data_size(inst_info['in_type'])
         else:
-            size = inst_info['out_bytes']
+            size = get_data_size(inst_info['out_type'])
         if matrix == 'a':
             (reg, lanes) = self.__get_input_reg_lanes(i, k, size)
             element_name = f"{matrix.upper()}[{i}][{k}]"
@@ -4000,7 +4080,7 @@ class InstCalcGfx11(InstCalc):
             (reg, lanes) = self.__get_input_reg_lanes(j, k, size)
             element_name = f"{matrix.upper()}[{k}][{j}]"
         else: # (matrix == 'c' or matrix == 'd'):
-            (reg, lanes) = self.__get_output_reg_lanes(N, i, j, int(size), opsel)
+            (reg, lanes) = self.__get_output_reg_lanes(N, i, j, size, opsel)
             element_name = f"{matrix.upper()}[{i}][{j}]"
         return (element_name, reg, lanes)
 
@@ -4030,7 +4110,8 @@ class InstCalcGfx11(InstCalc):
         Returns:
             Integer which indicates the regno offset for this matrix+OPSEL pair
         """
-        if (matrix in ('c', 'd') and self.inst_info['out_bytes'] == 2 and opsel == 4):
+        if (matrix in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16 and
+                opsel == 4):
             offset = 1
         else:
             offset = 0
@@ -4061,7 +4142,7 @@ class InstCalcGfx11(InstCalc):
         Returns:
             Integer indicating how many of the regnos in each GPR to print
         """
-        if (matrix in ('c', 'd') and self.inst_info['out_bytes'] == 2):
+        if (matrix in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16):
             num_regnos_to_print = math.ceil(gpr_ratio/2)
         else:
             num_regnos_to_print = math.ceil(gpr_ratio)
@@ -4142,7 +4223,7 @@ class InstCalcGfx11(InstCalc):
                                         transpose, contig_values)
 
     def _get_instruction_num_gprs(self, matrix: str, in_lanes: Optional[int] = 16,
-                                  out_bytes: Optional[float] = 4) -> int:
+                                  out_size: Optional[int] = 32) -> int:
         """ Calculates the number of GPRs needed to hold a matrix.
 
         Args:
@@ -4150,17 +4231,17 @@ class InstCalcGfx11(InstCalc):
             in_lanes: an integer that defines the number of contiguous lanes are used to hold
                 values of a matrix. On gfx11, this is always 16, so the default of this
                 argument is 16.
-            out_bytes: The number of bytes used to hold output values for this instruction.
-                For instance: some devices may store 2B values into either the low or high
-                half of a 4B output register. If this argument is not passed in, the function
-                will initialize the value to 4.
+            out_size: The number of bits used to hold output values for this instruction.
+                For instance: some devices may store 16b values into either the low or high
+                half of a 32b output register. If this argument is not passed in, the function
+                will initialize the value to 32.
 
         Returns:
             An integer that defines the number of GPRs needed to hold the requested matrix
         """
         # gfx11 uses 16 lanes for its inputs, and all outputs (even 2B values) are stored
         # into 4B locations.
-        return super()._get_instruction_num_gprs(matrix, in_lanes, out_bytes)
+        return super()._get_instruction_num_gprs(matrix, in_lanes, out_size)
 
     def _coord_to_input_reg_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
@@ -4177,12 +4258,12 @@ class InstCalcGfx11(InstCalc):
             String that contains the simple formula mapping coordinates to input registers
         """
         del matrix # Unused in gfx11
-        in_bytes = self.inst_info['in_bytes']
-        if in_bytes == 2:
+        data_size = get_data_size(self.inst_info['in_type'])
+        if data_size == 16:
             ret_string = 'floor(k / 2).[16*(k % 2)+15 : 16*(k % 2)]'
-        elif in_bytes == 1:
+        elif data_size == 8:
             ret_string = 'floor(k / 4).[8*(k % 4)+7 : 8*(k % 4)]'
-        else: # in_bytes == 0.5:
+        else: # data_size == 4:
             ret_string = 'floor(k / 8).[4*(k % 8)+3 : 4*(k % 8)]'
         return ret_string
 
@@ -4197,7 +4278,7 @@ class InstCalcGfx11(InstCalc):
             String that contains the simple formula mapping coordinates to output registers
         """
         ret_string = 'floor((16 * i) / wave_width)'
-        if self.inst_info['out_bytes'] == 2:
+        if get_data_size(self.inst_info['out_type']) == 16:
             ret_string = f"({ret_string}).[15:0]"
         return ret_string
 
@@ -4270,7 +4351,7 @@ class InstCalcGfx11(InstCalc):
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
         if matrix not in ('a', 'b'):
             ret_string = "(wave_width / 16) * GPR_num + floor(lane / 16)"
-            if self.inst_info['out_bytes'] == 2:
+            if get_data_size(self.inst_info['out_type']) == 16:
                 ret_string = f"({ret_string}).[15:0]"
         return ret_string
 
@@ -4290,10 +4371,10 @@ class InstCalcGfx11(InstCalc):
             particular register and lane combination.
         """
         del matrix # Unused on gfx11, both input matrices have the same layout
-        data_size = self.inst_info['in_bytes']
-        if data_size == 2:
+        data_size = get_data_size(self.inst_info['in_type'])
+        if data_size == 16:
             ret_string = "2 * GPR_num + floor(GPR_bits / 16)"
-        elif data_size == 1:
+        elif data_size == 8:
             ret_string = "4 * GPR_num + floor(GPR_bits / 8)"
         else:
             ret_string = "8 * GPR_num + floor(GPR_bits / 4)"

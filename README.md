@@ -195,6 +195,7 @@ This information includes:
 * The matrix dimensions and number of blocks used by the instruction
 * The computational throughput and co-execution capabilities
 * The number of general-purpose registers (GPRs) used by the instruction's matrices
+* A description of the data types this instruction takes as input and produces as output
 * Whether the matrices can be stored in architected vector registers (ArchVGPRs) and/or the accumulation vector registers (AccVGPRs)
 * Support for matrix modifiers such as CBSZ, ABID, BLGP, OPSEL, and NEG
 * Formulae for mapping between matrix entries and the registers and lanes that hold them, when no matrix modifier fields are set
@@ -231,6 +232,11 @@ Instruction: V_MFMA_F32_4X4X1F32
         B matrix source field: Src1
         C matrix source field: Src2
         D matrix source field: Vdst
+    Register data types:
+        Src0: FP32 (IEEE binary32 floating point)
+        Src1: FP32 (IEEE binary32 floating point)
+        Src2: FP32 (IEEE binary32 floating point)
+        Vdst: FP32 (IEEE binary32 floating point)
     Register capabilities:
         A matrix can use ArchVGPRs: True
         A matrix can use AccVGPRs: True
