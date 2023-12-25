@@ -62,6 +62,7 @@ This tool requires the following:
     * To install this package system wide, execute: `sudo pip install typing_extensions`
     * To install this package for the local user, execute: `pip install typing_extensions --user`
 * Installing prerequisites itself may require you to install `pip`
+* Now users can use `pip install -r requirements.txt` to install dependent packages
 
 Calculator Usage
 -------------------------------------------------------------------------------------
