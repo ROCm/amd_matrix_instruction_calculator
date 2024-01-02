@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 #
-# Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -53,7 +53,7 @@ from os import path
 from re import findall, search, MULTILINE
 from joblib import Parallel, delayed
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 class TestRunner:
     """ Class to run the application under test with a chosen command line, redirect the output
@@ -140,13 +140,21 @@ def run_error_tests(test_app, temp_dir):
     for arg in ("get-register", "matrix-entry", "register-layout", "matrix-layout"):
         r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} -A -B")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -C --output-calculation")
+    r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout -A --cbsz 2")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --cbsz 2")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 4")
+    r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -A --cbsz 4")
+    r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout --abid 1")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --abid 1")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 0 --abid 1")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 1 --abid 3")
+    r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -A --cbsz 1 --abid 4")
+    r.run("-a cdna3 -i v_smfmac_i32_16x16x64_i8 --register-layout -A --cbsz 1 --abid 4")
+    r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout -B --blgp 1")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --blgp 1")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --blgp 8")
+    r.run("-a cdna3 -i v_mfma_f64_4x4x4_4b_f64 --register-layout -D --blgp 1")
+    r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -C")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -k")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A -w 32")
     r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A -w 33")
@@ -349,7 +357,7 @@ def run_get_register(runner, matrix, M, N, K, B, test_string):
         K, and block sizes supported by this instruction, and walk over some of them for the
         target matrix when running the tests.
     """
-    if matrix == 'A':
+    if matrix in ('A', 'k'):
         row_letter = "-I"
         max_row = M
         col_letter = "-K"
@@ -402,6 +410,8 @@ def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, t
         max_reg_to_use = a_regs
     elif matrix == 'B':
         max_reg_to_use = b_regs
+    elif matrix == 'k':
+        max_reg_to_use = 1
     else:
         max_reg_to_use = cd_regs
     # Test only 2 registers instead of the whole range, to reduce the amount of test time taken.
@@ -478,8 +488,13 @@ def run_parallel_matrix_test(test_app, test_name, arch, inst, temp_file_name):
         max_neg = 7
     else:
         max_neg = 0
+    is_sparse = bool(search("smfmac", inst))
 
-    matrices = ('A', 'B', 'D', 'C')
+    matrices = ('A', 'B', 'D')
+    if is_sparse:
+        matrices += ('k',)
+    else:
+        matrices += ('C',)
 
     wave_sizes = get_supported_wave_sizes(arch)
 
@@ -490,10 +505,19 @@ def run_parallel_matrix_test(test_app, test_name, arch, inst, temp_file_name):
         b_regs = get_matrix_regs(r, arch, inst, wave, "B")
         cd_regs = get_matrix_regs(r, arch, inst, wave, "D")
         for matrix in matrices:
-            if matrix == 'A':
+            if matrix in ('A', 'k'):
+                if matrix == 'k':
+                    max_cbsz = 1
+                    max_neg = 0
                 for neg in range(max_neg+1):
                     for cbsz in range(max_cbsz+1):
-                        max_abid = int(math.pow(2, int(cbsz)) - 1)
+                        if (is_sparse and cbsz != 0):
+                            if get_in_bits(r, arch, inst) == 16:
+                                max_abid = 3
+                            else:
+                                max_abid = 1
+                        else:
+                            max_abid = int(math.pow(2, int(cbsz)) - 1)
                         for abid in range(max_abid+1):
                             test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} "
                             test_string += f"--cbsz {cbsz} --abid {abid} --neg {neg} "

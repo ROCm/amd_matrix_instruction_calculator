@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 #
-# Copyright (c) 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,10 +24,12 @@
 This tool allows users to generate information about the register layout
 for matrix multiplication instructions on AMD accelerators.
 
-This includes the Matrix Fused Multiply Add (MFMA) instructions that drive
-the Matrix Cores in AMD Instinct(tm) accelerators, including:
+This includes the Matrix Fused Multiply Add (MFMA) and Sparse Matrix Fused
+Multiply Accumulate (SMFMAC) instructions that drive the Matrix Cores in
+AMD Instinct(tm) accelerators, including:
  - AMD CDNA(tm) 1 architecture accelerators, such as AMD Instinct MI100
  - AMD CDNA 2 architecture accelerators, such as AMD Instinct MI200
+ - AMD CDNA 3 architecture accelerators, such as AMD Instinct MI300
 
 This also includes the Wave Matrix Multiply Accumulate (WMMA) instructions
 that drive the AI Accelerators in AMD Radeon(tm) GPUs, including:
@@ -45,6 +47,14 @@ There are five options for each matrix multiplication instruction:
    or D[] matrix (--register-layout).
  - Print the A[], B[], C[], or D[] matrix entries for all of the
    instructions' registers and lanes (--matrix-layout).
+
+SMFMAC instructions work on 4:2-sparse matrices, and have a "K[]" matrix.
+This is the compression index input, which is put into SrcC in place of
+the C[] matrix.
+
+This register is legal for the last four options (--get-register,
+--matrix-entry, --register-layout, --matrix-layout), but only for instructions
+that are sparse.
 """
 
 import argparse
@@ -60,7 +70,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.02"
+VERSION = "1.1"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -76,6 +86,14 @@ dict_isas = {
     'mi250'            : 'cdna2',
     'mi250x'           : 'cdna2',
     'aldebaran'        : 'cdna2',
+    'cdna3'            : 'cdna3',
+    'gfx940'           : 'cdna3',
+    'gfx941'           : 'cdna3',
+    'gfx942'           : 'cdna3',
+    'mi300'            : 'cdna3',
+    'mi300a'           : 'cdna3',
+    'mi300x'           : 'cdna3',
+    'aqua_vanjaram'    : 'cdna3',
     'rdna3'            : 'rdna3',
     'gfx1100'          : 'rdna3',
     'gfx1101'          : 'rdna3',
@@ -109,6 +127,10 @@ dict_math_types: Dict[str, MatrixNumericalType] = {
         'size': 32,
         'description': 'FP32 (IEEE binary32 floating point)',
     },
+    'xf32': {
+        'size': 32,
+        'description': 'FP32 (IEEE binary32 floating point)',
+    },
     'fp16': {
         'size': 16,
         'description': 'FP16 (IEEE binary16 floating point)',
@@ -124,6 +146,14 @@ dict_math_types: Dict[str, MatrixNumericalType] = {
     'int8': {
         'size': 8,
         'description': 'int8 (Signed 8-bit integer)',
+    },
+    'fp8': {
+        'size': 8,
+        'description': 'FP8 (AMD 4-bit exponent, 3-bit mantissa floating point)',
+    },
+    'bf8': {
+        'size': 8,
+        'description': 'BF8 (AMD 5-bit exponent, 2-bit mantissa floating point)',
     },
     'iu8': {
         'size': 8,
@@ -149,6 +179,8 @@ class MatrixInstruction(TypedDict):
         opcode: an integer opcode of this instruction within the VOP3P format
         in_type: a string that defines the data type of the matrix entry in the Src0 register,
             used as a key for the dict_math_types dictionary
+        in_type_src1: a string that defines the data type of the matrix entry in the Src1 register,
+            used as a key for the dict_math_types dictionary
         out_type: a string that defines each matrix entry's output data type, used as a key for
             the dict_math_types dictionary
         m: an integer that defines the M dimension of the matrix multiplication
@@ -161,6 +193,7 @@ class MatrixInstruction(TypedDict):
         gpr_byte_align: an integer for the byte alignment of matrix data held in registers
         blgp: a boolean that is True if the instruction can use the BLGP modifier
         cbsz_abid: a boolean that is True if the instruction can use the CBSZ and/or ABID modifiers
+        sparse: a boolean that is True if the instruction is a structured sparse matrix multiply
         cd_opsel: a boolean that is True if OPSEL can choose the bits used for the C/D matrices
         neg: a boolean that is True if the NEG and/or NEG_HI fields can be used
         coexec: a boolean that is True if this instruction can co-execute with VALU instructions
@@ -170,6 +203,7 @@ class MatrixInstruction(TypedDict):
     arch: str
     opcode: int
     in_type: str
+    in_type_src1: str
     out_type: str
     m: int
     n: int
@@ -181,6 +215,7 @@ class MatrixInstruction(TypedDict):
     gpr_byte_align: int
     blgp: bool
     cbsz_abid: bool
+    sparse: bool
     cd_opsel: bool
     neg: bool
     coexec: bool
@@ -199,6 +234,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 64,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -210,6 +246,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -219,6 +256,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 65,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -230,6 +268,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -239,6 +278,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 66,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 4,
             'n': 4,
@@ -250,6 +290,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -259,6 +300,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 68,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -270,6 +312,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -279,6 +322,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 69,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -290,6 +334,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -299,6 +344,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 72,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -310,6 +356,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -319,6 +366,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 73,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -330,6 +378,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -339,6 +388,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 74,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 4,
             'n': 4,
@@ -350,6 +400,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -359,6 +410,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 76,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -370,6 +422,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -379,6 +432,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 77,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -390,6 +444,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -399,6 +454,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 80,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 32,
             'n': 32,
@@ -410,6 +466,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -419,6 +476,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 81,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 16,
             'n': 16,
@@ -430,6 +488,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -439,6 +498,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 82,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 4,
             'n': 4,
@@ -450,6 +510,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -459,6 +520,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 84,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 32,
             'n': 32,
@@ -470,6 +532,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -479,6 +542,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 84,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 16,
             'n': 16,
@@ -490,6 +554,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -499,6 +564,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 104,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -510,6 +576,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -519,6 +586,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 105,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -530,6 +598,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -539,6 +608,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 107,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 4,
             'n': 4,
@@ -550,6 +620,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -559,6 +630,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 108,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -570,6 +642,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -579,6 +652,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna1',
             'opcode': 109,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -590,6 +664,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -601,6 +676,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 64,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -612,6 +688,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -621,6 +698,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 65,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -632,6 +710,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -641,6 +720,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 66,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 4,
             'n': 4,
@@ -652,6 +732,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -661,6 +742,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 68,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -672,6 +754,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -681,6 +764,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 69,
             'in_type': 'fp32',
+            'in_type_src1': 'fp32',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -692,6 +776,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -701,6 +786,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 72,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -712,6 +798,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -721,6 +808,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 73,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -732,6 +820,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -741,6 +830,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 74,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 4,
             'n': 4,
@@ -752,6 +842,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -761,6 +852,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 76,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -772,6 +864,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -781,6 +874,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 77,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -792,6 +886,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -801,6 +896,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 80,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 32,
             'n': 32,
@@ -812,6 +908,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -821,6 +918,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 81,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 16,
             'n': 16,
@@ -832,6 +930,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -841,6 +940,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 82,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 4,
             'n': 4,
@@ -852,6 +952,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -861,6 +962,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 84,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 32,
             'n': 32,
@@ -872,6 +974,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -881,6 +984,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 84,
             'in_type': 'int8',
+            'in_type_src1': 'int8',
             'out_type': 'int32',
             'm': 16,
             'n': 16,
@@ -892,6 +996,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -901,6 +1006,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 99,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -912,6 +1018,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -921,6 +1028,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 100,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -932,6 +1040,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -941,6 +1050,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 101,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 4,
             'n': 4,
@@ -952,6 +1062,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -961,6 +1072,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 102,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -972,6 +1084,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -981,6 +1094,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 103,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -992,6 +1106,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -1001,6 +1116,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 104,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -1012,6 +1128,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -1021,6 +1138,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 105,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -1032,6 +1150,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -1041,6 +1160,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 107,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 4,
             'n': 4,
@@ -1052,6 +1172,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': True,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -1061,6 +1182,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 108,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -1072,6 +1194,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -1081,6 +1204,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 109,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -1092,6 +1216,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': True,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': True,
@@ -1101,6 +1226,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 110,
             'in_type': 'fp64',
+            'in_type_src1': 'fp64',
             'out_type': 'fp64',
             'm': 16,
             'n': 16,
@@ -1112,6 +1238,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': False,
@@ -1121,6 +1248,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'cdna2',
             'opcode': 111,
             'in_type': 'fp64',
+            'in_type_src1': 'fp64',
             'out_type': 'fp64',
             'm': 4,
             'n': 4,
@@ -1132,10 +1260,1025 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 8,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': False,
             'coexec': False,
             'coexec_delay': -1
+        }
+    },
+    'cdna3': {
+        'v_mfma_f32_16x16x8_xf32': {
+            'arch': 'cdna3',
+            'opcode': 62,
+            'in_type': 'xf32',
+            'in_type_src1': 'xf32',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 8,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x4_xf32': {
+            'arch': 'cdna3',
+            'opcode': 63,
+            'in_type': 'xf32',
+            'in_type_src1': 'xf32',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 4,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x1_2b_f32': {
+            'arch': 'cdna3',
+            'opcode': 64,
+            'in_type': 'fp32',
+            'in_type_src1': 'fp32',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 1,
+            'blocks': 2,
+            'cycles': 64,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_mfma_f32_16x16x1_4b_f32': {
+            'arch': 'cdna3',
+            'opcode': 65,
+            'in_type': 'fp32',
+            'in_type_src1': 'fp32',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 1,
+            'blocks': 4,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_mfma_f32_4x4x1_16b_f32': {
+            'arch': 'cdna3',
+            'opcode': 66,
+            'in_type': 'fp32',
+            'in_type_src1': 'fp32',
+            'out_type': 'fp32',
+            'm': 4,
+            'n': 4,
+            'k': 1,
+            'blocks': 16,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_mfma_f32_32x32x2_f32': {
+            'arch': 'cdna3',
+            'opcode': 68,
+            'in_type': 'fp32',
+            'in_type_src1': 'fp32',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 2,
+            'blocks': 1,
+            'cycles': 64,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_mfma_f32_16x16x4_f32': {
+            'arch': 'cdna3',
+            'opcode': 69,
+            'in_type': 'fp32',
+            'in_type_src1': 'fp32',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 4,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_mfma_f32_32x32x4_2b_f16': {
+            'arch': 'cdna3',
+            'opcode': 72,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 4,
+            'blocks': 2,
+            'cycles': 64,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_16x16x4_4b_f16': {
+            'arch': 'cdna3',
+            'opcode': 73,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 4,
+            'blocks': 4,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_4x4x4_16b_f16': {
+            'arch': 'cdna3',
+            'opcode': 74,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 4,
+            'n': 4,
+            'k': 4,
+            'blocks': 16,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x8_f16': {
+            'arch': 'cdna3',
+            'opcode': 76,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 8,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_16x16x16_f16': {
+            'arch': 'cdna3',
+            'opcode': 77,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_i32_32x32x4_2b_i8': {
+            'arch': 'cdna3',
+            'opcode': 80,
+            'in_type': 'int8',
+            'in_type_src1': 'int8',
+            'out_type': 'int32',
+            'm': 32,
+            'n': 32,
+            'k': 4,
+            'blocks': 2,
+            'cycles': 64,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_i32_16x16x4_4b_i8': {
+            'arch': 'cdna3',
+            'opcode': 81,
+            'in_type': 'int8',
+            'in_type_src1': 'int8',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 4,
+            'blocks': 4,
+            'cycles': 32,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_i32_4x4x4_16b_i8': {
+            'arch': 'cdna3',
+            'opcode': 82,
+            'in_type': 'int8',
+            'in_type_src1': 'int8',
+            'out_type': 'int32',
+            'm': 4,
+            'n': 4,
+            'k': 4,
+            'blocks': 16,
+            'cycles': 8,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_i32_32x32x16_i8': {
+            'arch': 'cdna3',
+            'opcode': 84,
+            'in_type': 'int8',
+            'in_type_src1': 'int8',
+            'out_type': 'int32',
+            'm': 32,
+            'n': 32,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_i32_16x16x32_i8': {
+            'arch': 'cdna3',
+            'opcode': 84,
+            'in_type': 'int8',
+            'in_type_src1': 'int8',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x4_2b_bf16': {
+            'arch': 'cdna3',
+            'opcode': 93,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 4,
+            'blocks': 2,
+            'cycles': 64,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_16x16x4_4b_bf16': {
+            'arch': 'cdna3',
+            'opcode': 94,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 4,
+            'blocks': 4,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_4x4x4_16b_bf16': {
+            'arch': 'cdna3',
+            'opcode': 95,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 4,
+            'n': 4,
+            'k': 4,
+            'blocks': 16,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': True,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x8_bf16': {
+            'arch': 'cdna3',
+            'opcode': 96,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 8,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_16x16x16_bf16': {
+            'arch': 'cdna3',
+            'opcode': 97,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_smfmac_f32_16x16x32_f16': {
+            'arch': 'cdna3',
+            'opcode': 98,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_32x32x16_f16': {
+            'arch': 'cdna3',
+            'opcode': 100,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_16x16x32_bf16': {
+            'arch': 'cdna3',
+            'opcode': 102,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_32x32x16_bf16': {
+            'arch': 'cdna3',
+            'opcode': 104,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_i32_16x16x64_i8': {
+            'arch': 'cdna3',
+            'opcode': 106,
+            'in_type': 'int8',
+            'in_type_src1': 'int8',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 64,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_i32_32x32x32_i8': {
+            'arch': 'cdna3',
+            'opcode': 108,
+            'in_type': 'int8',
+            'in_type_src1': 'int8',
+            'out_type': 'int32',
+            'm': 32,
+            'n': 32,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_mfma_f64_16x16x4_f64': {
+            'arch': 'cdna3',
+            'opcode': 110,
+            'in_type': 'fp64',
+            'in_type_src1': 'fp64',
+            'out_type': 'fp64',
+            'm': 16,
+            'n': 16,
+            'k': 4,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_mfma_f64_4x4x4_4b_f64': {
+            'arch': 'cdna3',
+            'opcode': 111,
+            'in_type': 'fp64',
+            'in_type_src1': 'fp64',
+            'out_type': 'fp64',
+            'm': 4,
+            'n': 4,
+            'k': 4,
+            'blocks': 4,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': True,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_mfma_f32_16x16x32_bf8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 112,
+            'in_type': 'bf8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_16x16x32_bf8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 113,
+            'in_type': 'bf8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_16x16x32_fp8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 114,
+            'in_type': 'fp8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_16x16x32_fp8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 115,
+            'in_type': 'fp8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x16_bf8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 116,
+            'in_type': 'bf8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x16_bf8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 117,
+            'in_type': 'bf8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x16_fp8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 118,
+            'in_type': 'fp8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_mfma_f32_32x32x16_fp8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 119,
+            'in_type': 'fp8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 4
+        },
+        'v_smfmac_f32_16x16x64_bf8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 120,
+            'in_type': 'bf8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 64,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_16x16x64_bf8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 121,
+            'in_type': 'bf8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 64,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_16x16x64_fp8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 122,
+            'in_type': 'fp8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 64,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_16x16x64_fp8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 123,
+            'in_type': 'fp8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 64,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_32x32x32_bf8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 124,
+            'in_type': 'bf8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_32x32x32_bf8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 125,
+            'in_type': 'bf8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_32x32x32_fp8_bf8': {
+            'arch': 'cdna3',
+            'opcode': 126,
+            'in_type': 'fp8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
+        },
+        'v_smfmac_f32_32x32x32_fp8_fp8': {
+            'arch': 'cdna3',
+            'opcode': 127,
+            'in_type': 'fp8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 32,
+            'n': 32,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 32,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 8,
+            'blgp': False,
+            'cbsz_abid': True,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': True,
+            'coexec_delay': 8
         }
     },
     'rdna3': {
@@ -1143,6 +2286,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'rdna3',
             'opcode': 64,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -1154,6 +2298,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': True,
             'coexec': False,
@@ -1163,6 +2308,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'rdna3',
             'opcode': 65,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -1174,6 +2320,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': True,
             'coexec': False,
@@ -1183,6 +2330,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'rdna3',
             'opcode': 66,
             'in_type': 'fp16',
+            'in_type_src1': 'fp16',
             'out_type': 'fp16',
             'm': 16,
             'n': 16,
@@ -1194,6 +2342,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': True,
             'neg': True,
             'coexec': False,
@@ -1203,6 +2352,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'rdna3',
             'opcode': 67,
             'in_type': 'bf16',
+            'in_type_src1': 'bf16',
             'out_type': 'bf16',
             'm': 16,
             'n': 16,
@@ -1214,6 +2364,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': True,
             'neg': True,
             'coexec': False,
@@ -1223,6 +2374,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'rdna3',
             'opcode': 68,
             'in_type': 'iu8',
+            'in_type_src1': 'iu8',
             'out_type': 'int32',
             'm': 16,
             'n': 16,
@@ -1234,6 +2386,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': True,
             'coexec': False,
@@ -1243,6 +2396,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'arch': 'rdna3',
             'opcode': 69,
             'in_type': 'iu4',
+            'in_type_src1': 'iu4',
             'out_type': 'int32',
             'm': 16,
             'n': 16,
@@ -1254,6 +2408,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'gpr_byte_align': 4,
             'blgp': False,
             'cbsz_abid': False,
+            'sparse': False,
             'cd_opsel': False,
             'neg': True,
             'coexec': False,
@@ -1271,10 +2426,10 @@ def is_gfx9_arch(inst_info: MatrixInstruction) -> bool:
 
     Returns:
         A boolean that is True when the architecture for the input MatrixInstruction is from
-        a gfx9 architecture (i.e., CDNA1 or CDNA2).
+        a gfx9 architecture (i.e., CDNA1, CDNA2, or CDNA3).
         The boolean will be False if the MatrixInstruction is from a non-gfx9 architecture.
     """
-    return inst_info['arch'] in ('cdna1', 'cdna2')
+    return inst_info['arch'] in ('cdna1', 'cdna2', 'cdna3')
 
 def print_instructions(arch: str, instructions: Dict[str, MatrixInstruction],
                        to_print: TextIO) -> None:
@@ -1383,7 +2538,13 @@ def parse_and_run() -> int:
                                'or D[] matrix (--register-layout)')) + '\n' +
                 '\n'.join(wrap('- Print the A[], B[], C[], or D[] matrix entries '
                                "for all of the instructions' registers and lanes "
-                               '(--matrix-layout)')),
+                               '(--matrix-layout)')) +
+                '\n\n' +
+                '\n'.join(wrap('4:2 Sparse matrix instructions (SMFMAC) also have a K[] matrix. '
+                               'This is the compression index input, which is put into SrcC in '
+                               'place of the C[] matrix. This register is legal for the last four '
+                               'options (--get-register, --matrix-entry, --register-layout, '
+                               '--matrix-layout), but only for instructions that are sparse.')),
                 formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', '--version', action='store_true', dest='print_version',
                         help='Print the version of this tool')
@@ -1413,6 +2574,9 @@ def parse_and_run() -> int:
     parser.add_argument('-D', '--D-matrix', '--D_matrix', action='store_true',
                         dest='D_matrix',
                         help='Query information about the D[] matrix')
+    parser.add_argument('-k', '--compression', '--compression', action='store_true',
+                        dest='compression',
+                        help="Query information about spasrse instructions' compression indices")
     parser.add_argument('--cbsz', action='store', metavar="#", dest='cbsz', default='0', nargs='?',
                         help='When querying the A matrix, set the CBSZ control field')
     parser.add_argument('--abid', action='store', metavar="#", dest='abid', default='0', nargs='?',
@@ -1593,7 +2757,7 @@ def parse_and_run() -> int:
               "'--register-layout', '--matrix-layout', or '--detail-instruction'", file=sys.stderr)
         return -2
 
-    mats = [args.A_matrix, args.B_matrix, args.C_matrix, args.D_matrix]
+    mats = [args.A_matrix, args.B_matrix, args.C_matrix, args.D_matrix, args.compression]
     if mats.count(True) != 1:
         print("For the chosen option, '", end="", file=sys.stderr)
         if args.get_register:
@@ -1605,11 +2769,11 @@ def parse_and_run() -> int:
         else:
             print("--matrix-layout", end="", file=sys.stderr)
         print("', please choose " + ("only " if mats.count(True) > 1 else "") +
-              "one of: '--A-matrix', '--B-matrix', '--C-matrix', or '--D-matrix'",
-              file=sys.stderr)
+              "one of: '--A-matrix', '--B-matrix', '--C-matrix', '--D-matrix', " +
+              "or '--compression'", file=sys.stderr)
         return -2
 
-    mat_names = ['a', 'b', 'c', 'd']
+    mat_names = ['a', 'b', 'c', 'd', 'k']
     for (which, name) in zip(mats, mat_names):
         if which:
             matrix_to_use = name
@@ -1619,7 +2783,9 @@ def parse_and_run() -> int:
               file=sys.stderr)
         return -2
 
-    # CBSZ chooses 2^(how many blocks to broadcast into).
+    # For sparse matrices, a non-zero CBSZ[1:0] causes ABID to choose the compression index
+    # set. Technically CBSZ[2] is undefined -- for safety, let us say setting it is illegal.
+    # For non-sparse matrices, CBSZ chooses 2^(how many blocks to broadcast into).
     # After that, ABID chooses which block within the 2^(CBSZ) to broadcast to the others.
     if int(args.cbsz) > 0:
         if not inst_info['cbsz_abid']:
@@ -1627,34 +2793,52 @@ def parse_and_run() -> int:
             print(f"the {arch_to_use.upper()} architecture, does not ", end="", file=sys.stderr)
             print("support the CBSZ modifier.", file=sys.stderr)
             return -2
-        if matrix_to_use != 'a':
+        if matrix_to_use not in ('a', 'k'):
             if not (matrix_to_use == 'd' and args.output_calc):
                 print("The CBSZ modifier may only be used on the A ", end="", file=sys.stderr)
-                print("input matrix or the D output matrix when ", end="", file=sys.stderr)
+                print("input matrix, the K compression index register, ", end="", file=sys.stderr)
+                print("or the D output matrix when ", end="", file=sys.stderr)
                 print("'--output-calculation' is set.", file=sys.stderr)
                 return -2
-        max_cbsz = int(math.log(inst_info['blocks'], 2))
-        max_cbsz = min(4, max_cbsz)
+        if inst_info['sparse']:
+            max_cbsz = 3
+        else:
+            max_cbsz = int(math.log(inst_info['blocks'], 2))
+            max_cbsz = min(4, max_cbsz)
         if int(args.cbsz) > max_cbsz:
             print("The CBSZ modifier for the instruction ", end="", file=sys.stderr)
             print(f"{inst_to_use.upper()}", end="", file=sys.stderr)
             print(f", in the {arch_to_use.upper()} architecture,", end="", file=sys.stderr)
             print(f" may only contain values between 0 - {max_cbsz}, inclusive.", file=sys.stderr)
             return -2
-    # ABID chooses which lane gets broadcast to its aligned 2^(CBSZ) neighbors.
+    # ABID is complicated, because its legal values depend both on whether we are working
+    # on a sparse matrix, and on the legal values of CBSZ
+    # For sparse matrices on 16b values, a non-zero CBSZ[1:0] causes ABID[1:0] to choose the
+    # compression index set. For 8b sparse matrices, a non-zero CBSZ[1:0] causes ABID[0] to
+    # choose the compression index set.
+    # For non-sparse matrices, the ABID chooses which lane gets broadcast to its aligned
+    # 2^(CBSZ) neighbors.
     if int(args.abid) > 0:
         if not inst_info['cbsz_abid']:
             print(f"The chosen instruction, {inst_to_use.upper()}, in ", end="", file=sys.stderr)
             print(f"the {arch_to_use.upper()} architecture, does not ", end="", file=sys.stderr)
             print("support the ABID modifier.", file=sys.stderr)
             return -2
-        if matrix_to_use != 'a':
+        if matrix_to_use not in ('a', 'k'):
             if not (matrix_to_use == 'd' and args.output_calc):
                 print("The ABID modifier may only be used on the A ", end="", file=sys.stderr)
-                print("input matrix or the D output matrix when ", end="", file=sys.stderr)
-                print("'--output-calculation' is set.", file=sys.stderr)
+                print("input matrix, the K compression index register, ", end="", file=sys.stderr)
+                print("or the D output matrix when '--output-calculation' is set.", file=sys.stderr)
                 return -2
-        max_abid = int(math.pow(2, int(args.cbsz))-1)
+        if inst_info['sparse']:
+            max_abid = 0
+            if int(args.cbsz) > 0:
+                if get_data_size(inst_info['in_type']) == 16:
+                    max_abid = 3
+                elif get_data_size(inst_info['in_type']) == 8:
+                    max_abid = 1
+        else:
+            max_abid = int(math.pow(2, int(args.cbsz))-1)
         if int(args.abid) > max_abid:
             print("The ABID modifier for the instruction ", end="", file=sys.stderr)
             print(f"{inst_to_use.upper()}, in the ", end="", file=sys.stderr)
@@ -1667,6 +2851,8 @@ def parse_and_run() -> int:
                 print(" may only be set to zero.", file=sys.stderr)
             return -2
     # BLGP chooses between 8 different B matrix lane swizzles or broadcasts. 0 is default.
+    # In CDNA3, the three BLGP bits are used to automaticlaly negate the values in
+    # matrices A, B, and C, respectively.
     if int(args.blgp) > 0:
         if not inst_info['blgp']:
             print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
@@ -1674,9 +2860,15 @@ def parse_and_run() -> int:
             print("not support the BLGP modifier.", file=sys.stderr)
             return -2
         if not (matrix_to_use == 'd' and args.output_calc):
-            if matrix_to_use != 'b':
+            if (inst_info['in_type'] != 'fp64' and matrix_to_use != 'b'):
                 print("The BLGP modifier may only be used on the B ", end="", file=sys.stderr)
                 print("input matrix for the instruction ", end="", file=sys.stderr)
+                print(f"{inst_to_use.upper()}, or with the D matrix when ", end="", file=sys.stderr)
+                print("'--output-calculation' is set.", file=sys.stderr)
+                return -2
+            if (inst_info['in_type'] == 'fp64' and matrix_to_use in ('d', 'k')):
+                print("The BLGP modifier may only be used on matrices ", end="", file=sys.stderr)
+                print("A, B, and C for the instruction ", end="", file=sys.stderr)
                 print(f"{inst_to_use.upper()}, or with the D matrix when ", end="", file=sys.stderr)
                 print("'--output-calculation' is set.", file=sys.stderr)
                 return -2
@@ -1746,8 +2938,18 @@ def parse_and_run() -> int:
 
     negate = {'a': False, 'a_lo': False, 'a_hi': False, 'b': False, 'b_lo': False, 'b_hi': False,
               'c': False, 'c_abs': False, 'c_lo': False, 'c_hi': False, 'd': False, 'd_lo': False,
-              'd_hi': False}
-    if not is_gfx9_arch(inst_info):
+              'd_hi': False, 'k': False, 'k_lo': False, 'k_hi': False}
+    if (is_gfx9_arch(inst_info) and inst_info['in_type'] == 'fp64' and int(args.blgp) > 0):
+        # CDNA3 only supports negation on FP64 matrix multiplications. The BLGP field of
+        # VOP3P-MAI is instead used for negation.
+        # CDNA2 does not support BLGP field on FP64 matrix multiplications, so we would not reach
+        # this point -- we would catch lack of BLGP support in a check up above.
+        neg_this = int(args.blgp)
+        negate['a'] = bool(neg_this & 0x1)
+        negate['b'] = bool(neg_this & 0x2)
+        negate['c'] = bool(neg_this & 0x4)
+        args.blgp = '0'
+    elif not is_gfx9_arch(inst_info):
         # RDNA3 uses the NEG and NEG_HI fields for negation decisions. But NEG[2] and NEG_HI must
         # be zero for integer instructions.
         # For floating-point NEG_HI[2] is actually used to set absolute value on the C matrix.
@@ -1769,6 +2971,18 @@ def parse_and_run() -> int:
             negate['b_hi'] = bool(neg_hi & 0x2)
             negate['c'] = bool(neg & 0x4)
             negate['c_abs'] = bool(neg_hi & 0x4)
+
+    if (inst_info['sparse'] and matrix_to_use == 'c'):
+        print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
+        print("is a sparse MFMAC op and performs D += A*B.", file=sys.stderr)
+        print("This instruction does not support the C matrix as an input.", file=sys.stderr)
+        return -2
+    if ((not inst_info['sparse']) and matrix_to_use == 'k'):
+        print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
+        print("is not a sparse MFMAC op.", file=sys.stderr)
+        print("This instruction does not support the sparse ", end="", file=sys.stderr)
+        print("index register as an input.", file=sys.stderr)
+        return -2
 
     if [args.csv, args.md, args.ad].count(True) > 1:
         print('Can only use one of "--csv", "--markdown", and ', end="", file=sys.stderr)
@@ -1846,7 +3060,8 @@ class InstCalc(metaclass=ABCMeta):
         return ret_str
 
     @staticmethod
-    def _get_reg_name(data_size: int, regno: int) -> str:
+    def _get_reg_name(data_size: int, sparse: bool, compression_index: bool, k_cbsz: int,
+                      k_abid: int, regno: int) -> str:
         """ Calculates the register name and formats it as Va.c.
 
         Calculates the register name (but not lane) based on a regno. Formats it in Va.c
@@ -1858,6 +3073,18 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             data_size: integer holding the size of this regno's data, in bits.
+            sparse: True if this register is working on a structured sparsity input register
+            compression_index: True if this register holds the compression index for a
+                structured sparsity instruction.
+            k_cbsz: When working on compression indices, a non-zero CBSZ value will cause
+                different register locations to be used for the compression index. As such,
+                when passing in compression_index=True, this integer field holds the
+                instruction's CBSZ modifier.
+            k_abid: When working on compression indices, a non-zero CBSZ value will cause
+                different register locations to be used for the compression index. The ABID
+                field chooses which register location to use. As such, when passing in
+                compression_index=True and k_cbsz!=0, this integer field holds the
+                instruction's ABID modifier.
             regno: integer that holds the 'regno' (register storage location) that this
                 function will transform into a VGPR number and name.
 
@@ -1872,23 +3099,58 @@ class InstCalc(metaclass=ABCMeta):
                 e.g., when accessing the bottom half of a register, it would be .[15:0]
         """
         this_str = "v"
-        if data_size == 32:
-            this_str += (str(regno))
-        elif data_size == 64:
-            this_str += "[" + (str(regno * 2 + 1) + ":")
-            this_str += (str(regno * 2) + "]")
-        elif data_size == 16:
-            this_str += (str(int(regno / 2)))
-            bitno = regno % 2
-            this_str += f".[{16 * bitno + 15}:{16 * bitno}]"
-        elif data_size == 8:
-            this_str += (str(int(regno / 4)))
-            bitno = regno % 4
-            this_str += f".[{8 * bitno + 7}:{8 * bitno}]"
-        elif data_size == 4:
-            this_str += (str(int(regno / 8)))
-            bitno = regno % 8
-            this_str += f".[{bitno * 4 + 3}:{bitno * 4}]"
+        if not compression_index:
+            if data_size == 32:
+                this_str += (str(regno))
+            elif data_size == 64:
+                this_str += "[" + (str(regno * 2 + 1) + ":")
+                this_str += (str(regno * 2) + "]")
+            elif data_size == 16:
+                this_str += (str(int(regno / 2)))
+                # If we are in a sparse matrix, each of the 2 .[15:0]/.[31:16] entries are combined
+                # to hold 4 values (2 of which are 0). Which of the 4 exist is dynamically chosen
+                # by data in another register. As such, in this static tool, we cannot tell
+                # you if a value exists in the .[15:0]/.[31:16] pair, nor which one it might be in.
+                # As such, we tell users that these entries just live in the 4-byte register
+                # by skipping the .[15:0]/.[31:16] distinction in the name.
+                if not sparse:
+                    bitno = regno % 2
+                    this_str += f".[{16 * bitno + 15}:{16 * bitno}]"
+            elif data_size == 8:
+                this_str += (str(int(regno / 4)))
+                # See the above comment about sparse matrices. The concept is similar here
+                # in 1B values. .[7:0]/.[15:8] holding "4" values means we just report it as
+                # .[15:0] holding 4 matrix entries, etc.
+                if not sparse:
+                    bitno = regno % 4
+                    this_str += f".[{8 * bitno + 7}:{8 * bitno}]"
+                else:
+                    if regno % 4 < 2:
+                        this_str += ".[15:0]"
+                    else:
+                        this_str += ".[31:16]"
+            elif data_size == 4:
+                this_str += (str(int(regno / 8)))
+                bitno = regno % 8
+                this_str += f".[{bitno * 4 + 3}:{bitno * 4}]"
+        else:
+            # In the 4:2 compression case, the compression index requires 2 bits for each
+            # actually-stored entry in the matrix (which of the four values is stored in the
+            # first location, and which of the four values is stored in the second location).
+            # As such, every entry in the compression array has 2 bits.
+            # The way this is stored in the compression matrix is in "sets" that are indexed
+            # ABID register. The first starts at VGPR0 bits 1:0, and extends for however many
+            # storage locations are contained in a lane of the A matrix's input VGPR.
+            # The A matrix holds 2 VGPRs, that are each 4B.
+            # With a data size of N bytes, this yields (8 / N) locations to store into.
+            this_str += str(int(regno * data_size / 64))
+            # Move the register up by (8 / N) register slots for every value of ABID
+            if k_cbsz != 0:
+                regno += int((64 * k_abid) / data_size)
+            # Do a floor(regno / 2) to get the base register bits that will hold thise register,
+            # then multiply by 4 to offset the bits.
+            index = int(regno / 2) * 4
+            this_str += f".[{index + 3}:{index}]"
         return this_str
 
     @staticmethod
@@ -1920,7 +3182,7 @@ class InstCalc(metaclass=ABCMeta):
         return full_name
 
     @staticmethod
-    def _get_elements_per_gpr(data_size: int) -> float:
+    def _get_elements_per_gpr(data_size: int, sparse_register: bool) -> float:
         """ Calculates how many elements of a matrix value fit in each register.
 
         Returns how many elements of the matrix (each element of size data_size)
@@ -1929,6 +3191,9 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             data_size: integer holding the size of the requested data, in bits.
+            sparse_register: boolean that is True if this query is about a register that
+                holds a 4:2 structured-sparsity data, so twice as many values will
+                fit into a 4B register.
 
         Returns:
             A floating-point value that holds how many matrix values will fit into a 4B VGPR.
@@ -1942,6 +3207,10 @@ class InstCalc(metaclass=ABCMeta):
         # 4B values need one register per unit of data
         # 8B values need two registers per unit of data
         elements = reg_size / data_size
+        # Values in a sparse matrix effectively need half as much storage, so
+        # we say they fit twice as many elements per gpr.
+        if sparse_register:
+            elements *= 2
         return elements
 
     @staticmethod
@@ -2044,10 +3313,11 @@ class InstCalc(metaclass=ABCMeta):
         per-instruction modifiers, so those are all input arguments.
 
         Args:
-            matrix: String indicating the matrix to query: 'a', 'b', 'c', or 'd'
-            i: integer coordinate for the query of the matrix row for A, C, & D matrices
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+                for the compression index matrix in sparse matrix ops
+            i: integer coordinate for the query of the matrix row for A, C, D, & K matrices
             j: integer coordinate for the query of the matrix column for the B, C, & D matrices
-            k: integer coordinate for the query of the A column or B row
+            k: integer coordinate for the query of the A & K column or B row
             block: integer coordinate for the block to query
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
@@ -2188,20 +3458,21 @@ class InstCalc(metaclass=ABCMeta):
                 b_name = self.__neg_abs_name(b_reg, f"Src1_{b_reg_lane}", 'b', negate)
                 to_ret.append(f"{a_name}*{b_name}")
         ret_string = " + ".join(to_ret)
-        (c_ele, c_reg, c_lanes) = self._get_reg_lanes('c', i, j, k, block, 0, 0, 0, opsel)
-        c_lane = c_lanes[0]
-        if negate['c']:
-            ret_string += " - "
-        else:
-            ret_string += " + "
-        abs_str = ""
-        if negate['c_abs']:
-            abs_str = "|"
-        if find_element:
-            ret_string += f"{abs_str}{c_ele}{abs_str}"
-        else:
-            c_reg_lane = self.__format_reg_lane(c_reg, c_lane)
-            ret_string += f"{abs_str}Src2_{c_reg_lane}{abs_str}"
+        if not inst_info['sparse']:
+            (c_ele, c_reg, c_lanes) = self._get_reg_lanes('c', i, j, k, block, 0, 0, 0, opsel)
+            c_lane = c_lanes[0]
+            if negate['c']:
+                ret_string += " - "
+            else:
+                ret_string += " + "
+            abs_str = ""
+            if negate['c_abs']:
+                abs_str = "|"
+            if find_element:
+                ret_string += f"{abs_str}{c_ele}{abs_str}"
+            else:
+                c_reg_lane = self.__format_reg_lane(c_reg, c_lane)
+                ret_string += f"{abs_str}Src2_{c_reg_lane}{abs_str}"
         return ret_string
 
     def calculate_get_register(self, matrix: str, out_calc: bool, negate: Dict[str, bool],
@@ -2225,16 +3496,16 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
             out_calc: True if, when printing the register location for the D
                 output matrix entry, you desire to also print the register
                 locations of the A, B, and C matrices that went into the
                 calculation of the output.
             negate: dictionary of matrix names to bools that indicate whether to
                 negate and absolute-val entries from this matrix.
-            i: integer coordinate for the query of the matrix row for A, C, & D matrices
+            i: integer coordinate for the query of the matrix row for A, C, D, & K matrices
             j: integer coordinate for the query of the matrix column for the B, C, & D matrices
-            k: integer coordinate for the query of the A column or B row
+            k: integer coordinate for the query of the A & K column or B row
             block: integer coordinate for the block to query
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
@@ -2302,7 +3573,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
             blgp: integer value of the instruction's BLGP modifier
@@ -2320,7 +3591,7 @@ class InstCalc(metaclass=ABCMeta):
         K = inst_info['k']
 
         register_dict: Dict[str, List[str]] = {}
-        if matrix == 'a':
+        if matrix in ('a', 'k'):
             N = 1
         elif matrix == 'b':
             M = 1
@@ -2334,8 +3605,9 @@ class InstCalc(metaclass=ABCMeta):
                                                                     cbsz, abid, blgp, opsel)
                         for lane in lanes:
                             reg_key = self.__format_reg_lane(reg, lane)
-                            # With BLGP set, we can end up with multiple matrix entries in the
-                            # same register.
+                            # With 4:2 sparsity, we can end up with multiple matrix entries in the
+                            # same register, since they are compressed out when they are zero.
+                            # This is also true with BLGP set.
                             if reg_key in register_dict:
                                 old_list = register_dict[reg_key]
                                 old_list.append(mat_val)
@@ -2365,7 +3637,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
             opsel: integer value of the instruction's OPSEL modifier
 
         Returns:
@@ -2395,7 +3667,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
             gpr_ratio: the number of regnos in each GPR
 
         Returns:
@@ -2424,7 +3696,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
             out_calc: True if, when printing the matrix entry for the D output
                 location, you desire to also print the matrix entries of the A, B,
                 and C matrices that went into the calculation of the output.
@@ -2443,6 +3715,7 @@ class InstCalc(metaclass=ABCMeta):
         inst_info = self.inst_info
         in_type = inst_info['in_type']
         out_type = inst_info['out_type']
+        sparse = inst_info['sparse'] and (matrix in ('a', 'k'))
 
         orig_cbsz = cbsz
         orig_abid = abid
@@ -2474,17 +3747,20 @@ class InstCalc(metaclass=ABCMeta):
         # (64b values).  So calculating the total number of VGPRs required
         # by a matrix requires knowing how many elements of the matrix we
         # can fit in a VGPR.
-        if matrix in ('a', 'b'):
+        if matrix in ('a', 'b', 'k'):
             data_size = get_data_size(in_type)
             if matrix == 'a':
-                gpr_ratio = self._get_elements_per_gpr(data_size)
+                gpr_ratio = self._get_elements_per_gpr(data_size, sparse)
                 total_gprs = self._get_instruction_num_gprs(matrix)
+            elif matrix == 'k':
+                gpr_ratio = self._get_elements_per_gpr(data_size, sparse)
+                total_gprs = 1
             else:
-                gpr_ratio = self._get_elements_per_gpr(data_size)
+                gpr_ratio = self._get_elements_per_gpr(data_size, False)
                 total_gprs = self._get_instruction_num_gprs(matrix)
         else:
             data_size = get_data_size(out_type)
-            gpr_ratio = self._get_elements_per_gpr(data_size)
+            gpr_ratio = self._get_elements_per_gpr(data_size, False)
             total_gprs = self._get_instruction_num_gprs(matrix)
 
         if reg >= total_gprs:
@@ -2506,13 +3782,21 @@ class InstCalc(metaclass=ABCMeta):
         # (not the VGPR). See the above comment about multiple values per GPR
         # or multiple GPRs per value. So we calculate the 'regno' based on the
         # user-requested VGPR number and the storage size
+        if sparse:
+            # Reduce the storage size by half due to being in a 4:2 compression matrix
+            # Otherwise, when we try to calculate all the regno below, we will talk
+            # past the end of the actual registers available in this instruction
+            gpr_ratio /= 2
+
         num_printed = 0
+        if matrix == 'k':
+            num_regnos_to_print *= 2
         while num_printed < num_regnos_to_print:
             regno = int(reg * gpr_ratio) + int(offset)
-            base_gpr_name = self._get_reg_name(data_size, regno)
+            base_gpr_name = self._get_reg_name(data_size, sparse, matrix == 'k', cbsz, abid, regno)
             gpr_lane_name = self.__format_reg_lane(base_gpr_name, lane)
             if gpr_lane_name not in register_dict:
-                if (matrix == 'a' and cbsz != 0):
+                if ((matrix in ('a', 'k')) and cbsz != 0):
                     print(f"Due to instruction modifiers CBSZ and ABID, lane {lane} ", end="")
                 elif (matrix == 'b' and blgp != 0):
                     print(f"Due to instruction modifier BLGP, lane {lane} ", end="")
@@ -2536,22 +3820,29 @@ class InstCalc(metaclass=ABCMeta):
     def __entries_per_regno(self, matrix: str) -> float:
         """ Calculates the number of entries per register slot.
 
-        When printing out the matrix entries are specific register/lane combinations, we may
-        eventually have more than one register at that location.
+        When printing out the matrix entries are specific register/lane combinations, we
+        sometimes have more than one register at that location. For instance, SMFMAC
+        instructions have 4 entires in a register that would only hold two values -- two of the
+        entries are compressed out. For the compression indicies, we have the similar type of
+        compression. As such, we need to move the "regno" (the actual register{lane}.subset
+        combination) ahead by a certain amount for every matrix entry we print.
 
         This function calculates this scaling value based on the matrix and type of instruction.
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
 
         Returns:
             Floating point scaling calculation, e.g. a value of 0.5 indicates that there are
             two entries in each "regno" slot, so only move the regno value by 1 only after
             printing twice.
         """
-        del matrix # Unused
-        return 1
+        if ((self.inst_info['sparse'] and matrix == 'a') or matrix == 'k'):
+            ret_this = 0.5
+        else:
+            ret_this = 1
+        return ret_this
 
     @staticmethod
     def __get_join_char(output_type: str) -> str:
@@ -2630,7 +3921,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
             requested_output: string that indicates the type of output, from the list of
                 csv, markdown, asciidoc, or grid.
             negate: dictionary of matrix names to bools that indicate whether to
@@ -2651,7 +3942,7 @@ class InstCalc(metaclass=ABCMeta):
         join_char = self.__get_join_char(requested_output)
 
         for b in range(B):
-            if matrix == 'a':
+            if matrix in ('a', 'k'):
                 if print_blocks:
                     # By setting CBSZ and ABID, it is possible to have mutliple blocks
                     # of the matrix math stored in a single register. So we want to
@@ -2753,7 +4044,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
             requested_output: string that indicates the type of output, from the list of
                 csv, markdown, asciidoc, or grid.
             negate: dictionary of matrix names to bools that indicate whether to
@@ -2773,12 +4064,17 @@ class InstCalc(metaclass=ABCMeta):
         B = inst_info['blocks']
         in_type = inst_info['in_type']
         out_type = inst_info['out_type']
+        sparse = inst_info['sparse'] and (matrix in ('a', 'k'))
         join_char = self.__get_join_char(requested_output)
 
         register_dict = self.__create_register_dict(matrix, cbsz, abid, blgp, opsel)
 
-        if matrix == 'a':
+        if matrix in ('a', 'k'):
             data_size = get_data_size(in_type)
+            # In sparse matrices, there are only half as many registers
+            # due to the 4:2 compression.
+            if sparse:
+                K = int(K / 2)
             total_gpr_slots = int(M * K * B / contig_values)
         elif matrix == 'b':
             data_size = get_data_size(in_type)
@@ -2795,7 +4091,8 @@ class InstCalc(metaclass=ABCMeta):
             lane = self._get_blgp_transformed_lane(lane, blgp)
             row_tab = [str(lane)]
             for regno in range(total_gpr_slots):
-                base_gpr_name = self._get_reg_name(data_size, regno)
+                base_gpr_name = self._get_reg_name(data_size, sparse, matrix == 'k',
+                                                   cbsz, abid, regno)
                 gpr_lane_name = self.__format_reg_lane(base_gpr_name, lane)
                 # If we have CBSZ and ABID set, some lanes may not exist in this
                 # table, so skip over putting them in the list to print.
@@ -2806,7 +4103,10 @@ class InstCalc(metaclass=ABCMeta):
                 for to_print in matrix_element:
                     to_print = self.__neg_abs_name(base_gpr_name, to_print, matrix, negate)
                     elements_to_print.append(to_print)
-                row_tab.append(join_char.join(elements_to_print))
+                if not sparse:
+                    row_tab.append(join_char.join(elements_to_print))
+                elif regno % 2 == 0:
+                    row_tab.append(join_char.join(elements_to_print))
                 if regno not in seen_regno:
                     seen_regno.add(regno)
                     found_regnos.append(regno)
@@ -2817,7 +4117,18 @@ class InstCalc(metaclass=ABCMeta):
                 table_to_print.append(row_tab)
 
         for regno in found_regnos:
-            header.append(self._get_reg_name(data_size, regno))
+            # In sparse matrices, the 4:2 compression puts 4 values into
+            # 2 register slots. For instance, the lower slot could have
+            # value 3 and the upper slot could have 3. As such, we need
+            # to print both slots containing all 4 values. As such, we
+            # only print 1/4 of the table entries, and put more info into
+            # each of the entries.
+            # We already cut K in half above to create half as many
+            # register slots. Now skip every other one because we will
+            # fill them with 4 matrix entries.
+            if (not sparse or regno % 2 == 0):
+                header.append(self._get_reg_name(data_size, sparse, matrix == 'k',
+                                                 cbsz, abid, regno))
 
         deduplicated = []
         for x in table_to_print:
@@ -2836,13 +4147,13 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, or k (for the compression index of sparse matrices)
             in_lanes: an integer that defines the number of contiguous lanes are used to hold
                 values of a matrix. If this is not passed in, the argument is matched to the
                 wavefront size of the target architecture.
             out_size: The number of bits used to hold output values for this instruction.
                 For instance: some devices may store 16b values into either the low or high
-                half of a 32b output register. These architectures would need out_size=32.
+                half of a 32b output register. These architectures would need out_type=32.
                 If this is not passed in, the argument is matched to the actual instruction's
                 output data size (e.g. 16b in this example case).
 
@@ -2852,14 +4163,15 @@ class InstCalc(metaclass=ABCMeta):
         inst_info = self.inst_info
         if in_lanes is None:
             in_lanes = 64
+        sparse_op = (matrix == 'a' and inst_info['sparse'])
         if matrix in ('a', 'b'):
             lanes_used = int(in_lanes)
-            gpr_ratio = self._get_elements_per_gpr(get_data_size(inst_info['in_type']))
+            gpr_ratio = self._get_elements_per_gpr(get_data_size(inst_info['in_type']), sparse_op)
         else:
             if out_size is None:
-                out_size = get_data_size(self.inst_info['out_type'])
+                out_size = get_data_size(inst_info['out_type'])
             lanes_used = int(self.wave_width)
-            gpr_ratio = self._get_elements_per_gpr(out_size)
+            gpr_ratio = self._get_elements_per_gpr(out_size, False)
         if matrix in ('a', 'c', 'd'):
             rows = inst_info['m']
         else:
@@ -2883,7 +4195,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a or b
+                a, b, or k (for the compression index of sparse matrices)
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
@@ -2913,13 +4225,17 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, or k (for the compression index of sparse matrices)
 
         Returns:
             String that contains the simple formula mapping coordinates to registers
         """
         if matrix in ('a', 'b'):
             ret_str = self._coord_to_input_reg_eqn(matrix)
+        elif matrix == 'k':
+            data_size = get_data_size(self.inst_info['in_type'])
+            contig_vals = int(32 / data_size)
+            ret_str = f"0.[4*(floor(k / 4) % {contig_vals})+3 : 4*(floor(k / 4) % {contig_vals})]"
         else: # C/D matrices
             ret_str = self._coord_to_output_reg_eqn()
         return ret_str
@@ -2937,7 +4253,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, or k (for the compression index of sparse matrices)
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
@@ -2950,7 +4266,8 @@ class InstCalc(metaclass=ABCMeta):
         register and lane.
 
         Will always print A[], B[], and D[]. If the instruction allows C[] matrices, then it will
-        print D[] as "C or D[i][j]".
+        print D[] as "C or D[i][j]". For sparse instructions, may also print the compression
+        matrix.
 
         Args:
             block: string that contains text to place in the matrix entry map for blocks.
@@ -2960,7 +4277,12 @@ class InstCalc(metaclass=ABCMeta):
         print("    Matrix element to register mapping with no modifiers:")
         print(f"        A[i][k]{block} GPR: {self.__coord_to_reg_eqn('a')}")
         print(f"        A[i][k]{block} Lane: {self._coord_to_lane_eqn('a')}")
-        cd_str = "C or D"
+        if not self.inst_info['sparse']:
+            cd_str = "C or D"
+        else:
+            cd_str = "D"
+            print(f"        compression[i][k] GPR: {self.__coord_to_reg_eqn('k')}")
+            print(f"        compression[i][k] Lane: {self._coord_to_lane_eqn('k')}")
         print(f"        B[k][j]{block} GPR: {self.__coord_to_reg_eqn('b')}")
         print(f"        B[k][j]{block} Lane: {self._coord_to_lane_eqn('b')}")
         print(f"        {cd_str}[i][j]{block} GPR: {self.__coord_to_reg_eqn('d')}")
@@ -2987,14 +4309,14 @@ class InstCalc(metaclass=ABCMeta):
         """ Returns equation to map register+lane to i index.
 
         Takes instruction info and returns a string containing an equation which lets users
-        calculate the i coordinate for the A, C, or D matrices.
+        calculate the i coordinate for the A, C, D, or compression index matrices.
 
         c and d matrix calculations are machine-specific, and should be handled by
         child classes overloading this function.
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, c, or d
+                a, c, d, or k (for the compression index of sparse matrices)
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
@@ -3003,6 +4325,8 @@ class InstCalc(metaclass=ABCMeta):
         ret_string = "Unknown" # c and d matrix must be handled by child classes
         if matrix == 'a':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
+        elif matrix == 'k':
+            ret_string = f"(lane % {self.inst_info['m']})"
         return ret_string
 
     def __reg_lane_to_output_j_coord_eqn(self) -> str:
@@ -3056,7 +4380,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a or b
+                a, b, and k (for the compression index of sparse matrics)
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
@@ -3076,7 +4400,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
@@ -3087,8 +4411,9 @@ class InstCalc(metaclass=ABCMeta):
     def __print_long_element_eqn(lead_line: str, to_print: str) -> None:
         """ Print long equation lines formatted so newlines align with leading label.
 
-        Split long equations that have manually put newlines in.
-        Format the horizontal locations so that the newlines all line up with a leading label.
+        Split long equations, such as for ranges of sparse matrices, that have manually
+        put newlines in. Format the horizontal locations so that the newlines all line
+        up with a leading label.
 
         Args:
             lead_line: string that holds the line (such as the foo in Foo: Bar_Equation)
@@ -3119,12 +4444,23 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             print_block: True if this equation should print information about blocks.
         """
+        inst_info = self.inst_info
+        sparse_op = inst_info['sparse']
+
         print("    Register to matrix element mapping with no modifiers:")
         print(f"        A i: {self._reg_lane_to_i_coord_eqn('a')}")
-        print(f"        A k: {self._reg_lane_to_k_coord_eqn('a')}")
+        if not sparse_op:
+            print(f"        A k: {self._reg_lane_to_k_coord_eqn('a')}")
+        else:
+            self.__print_long_element_eqn("A k", self._reg_lane_to_k_coord_eqn('a'))
         if print_block:
             print(f"        A block: {self._reg_lane_to_block_eqn('a')}")
-        cd_str = "C or D"
+        if not inst_info['sparse']:
+            cd_str = "C or D"
+        else:
+            cd_str = "D"
+            print(f"        compression i: {self._reg_lane_to_i_coord_eqn('k')}")
+            self.__print_long_element_eqn("compression k", self._reg_lane_to_k_coord_eqn('k'))
         print(f"        B j: {self.__reg_lane_to_j_coord_eqn('b')}")
         print(f"        B k: {self._reg_lane_to_k_coord_eqn('b')}")
         if print_block:
@@ -3223,7 +4559,10 @@ class InstCalc(metaclass=ABCMeta):
                 print(f"    Wave{size} register usage:")
             print(f"        GPRs required for A: {total_in_a_gprs}")
             print(f"        GPRs required for B: {total_in_b_gprs}")
-            print(f"        GPRs required for C: {total_out_gprs}")
+            # Sparse MFMAC instructions are D += A * B, so there is no C matrix at all.
+            # Therefore, skip printing information about the C matrix.
+            if not inst_info['sparse']:
+                print(f"        GPRs required for C: {total_out_gprs}")
             print(f"        GPRs required for D: {total_out_gprs}")
             print(f"        GPR alignment requirement: {inst_info['gpr_byte_align']} bytes")
 
@@ -3235,8 +4574,11 @@ class InstCalc(metaclass=ABCMeta):
         """
         print("    Register data types:")
         print(f"        Src0: {get_type_desc(self.inst_info['in_type'])}")
-        print(f"        Src1: {get_type_desc(self.inst_info['in_type'])}")
-        print(f"        Src2: {get_type_desc(self.inst_info['out_type'])}")
+        print(f"        Src1: {get_type_desc(self.inst_info['in_type_src1'])}")
+        if not self.inst_info['sparse']:
+            print(f"        Src2: {get_type_desc(self.inst_info['out_type'])}")
+        else:
+            print("        Src2: A matrix compression indices")
         print(f"        Vdst: {get_type_desc(self.inst_info['out_type'])}")
 
     def _print_register_info(self, encoding_name: str = "Unknown") -> None:
@@ -3256,7 +4598,10 @@ class InstCalc(metaclass=ABCMeta):
         print(f"    {encoding_name} register encoding:")
         print("        A matrix source field: Src0")
         print("        B matrix source field: Src1")
-        print("        C matrix source field: Src2")
+        if not self.inst_info['sparse']:
+            print("        C matrix source field: Src2")
+        else:
+            print("        Compression index field: Src2")
         print("        D matrix source field: Vdst")
         self._print_register_types()
 
@@ -3276,7 +4621,7 @@ class InstCalcGfx9(InstCalc):
     """ Calculator for matrix multiplication instruction details on gfx9 architecture.
 
     This is a child class of the InstCalc class, because gfx9 architectures require certain
-    different calculations that other architectures. CDNA1 and CDNA2 use the same
+    different calculations that other architectures. CDNA1, CDNA2, and CDNA3 all use the same
     rough calculations for placing matrix values into registers, though the instructions, their
     dimensions, and throughputs change in each generation.
 
@@ -3312,7 +4657,8 @@ class InstCalcGfx9(InstCalc):
         return b_lanes[0]
 
     def __get_input_reg_lanes(self, M: int, K: int, B: int, i: int, k: int, b: int,
-                              data_size: int, blgp: int) -> Tuple[str, List[int]]:
+                              data_size: int, sparse: bool, compression_index: bool,
+                              k_cbsz: int, k_abid: int, blgp: int) -> Tuple[str, List[int]]:
         """ Calculates a matrix's input register and lane number based on coordinates.
 
         For gfx9, calculates the input register and the lane within that register for an
@@ -3321,18 +4667,30 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             M: integer "outer" dimension of the input matrix, in matrix entries.
-                For A matrices, this is the height. For B matrices, this is the width
+                For A and K matrices, this is the height. For B matrices, this is the width
             K: integer "inner" dimension of the input matrix, in matrix entries.
-                For A matrices, this is the width. For B matrices, this is the height
+                For A and K matrices, this is the width. For B matrices, this is the height
             B: integer number of blocks in the input matrix
             i: integer location within the input matrix's "outer" dimension
-                For A matrices, this is the desired row
+                For A and K matrices, this is the desired row
                 For B matrices this is the desired column
             j: integer location within the input matrix's "inner" dimension
-                For A matrices, this is the desired column
+                For A and K matrices, this is the desired column
                 For B matrices, this is the desired row
             b: integer block number within the input matrix
             data_size: integer size of the input data, in bits
+            sparse: True if this register is working on a structured sparsity input register
+            compression_index: True if this register holds the compression index for a
+                structured sparsity instruction.
+            k_cbsz: When working on compression indices, a non-zero CBSZ value will cause
+                different register locations to be used for the compression index. As such,
+                when passing in compression_index=True, this integer field holds the
+                instruction's CBSZ modifier.
+            k_abid: When working on compression indices, a non-zero CBSZ value will cause
+                different register locations to be used for the compression index. The ABID
+                field chooses which register location to use. As such, when passing in
+                compression_index=True and k_cbsz!=0, this integer field holds the
+                instruction's ABID modifier.
             blgp: integer value of the instruction's BLGP modifier
 
         Returns:
@@ -3360,7 +4718,8 @@ class InstCalcGfx9(InstCalc):
         # sure we take into account that some types (like some FP32 instructions)
         # will not move to different registers as we walk over k.
         local_element = k % elements_in_contiguous_gprs
-        register_name = self._get_reg_name(data_size, local_element)
+        register_name = self._get_reg_name(data_size, sparse, compression_index, k_cbsz, k_abid,
+                                           local_element)
 
         # The lane within the chosen register has three parts:
         # First: every block will walk over an entire column of the input (if
@@ -3430,7 +4789,7 @@ class InstCalcGfx9(InstCalc):
         local_element += int(i / (multirow_height * multirows_per_register)) * multirow_height
         # Finally, choose the register for the row within the multi-row
         local_element += int(i % multirow_height)
-        register_name = self._get_reg_name(data_size, local_element)
+        register_name = self._get_reg_name(data_size, False, False, 0, 0, local_element)
 
         # Logic to find the lane within the register found above
         # Set the initial offset
@@ -3454,13 +4813,14 @@ class InstCalcGfx9(InstCalc):
         per-instruction modifiers, so those are all input arguments.
 
         opsel is ignored by this function, because gfx9 does not use this instruction modifier.
-        Legal matrix values are 'a', 'b', 'c', or 'd'
+        Legal matrix values are 'a', 'b', 'c', 'd', and 'k'.
 
         Args:
-            matrix: String indicating the matrix to query: 'a', 'b', 'c', or 'd'
-            i: integer coordinate for the query of the matrix row for A, C, & D matrices
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+                for the compression index matrix in sparse matrix ops
+            i: integer coordinate for the query of the matrix row for A, C, D, & K matrices
             j: integer coordinate for the query of the matrix column for the B, C, & D matrices
-            k: integer coordinate for the query of the A column or B row
+            k: integer coordinate for the query of the A & K column or B row
             block: integer coordinate for the block to query
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
@@ -3483,17 +4843,42 @@ class InstCalcGfx9(InstCalc):
         K = inst_info['k']
         B = inst_info['blocks']
         # Leave these as false out here, in case we are checking against matrix B
-        if matrix in ('a', 'b'):
+        sparse = False
+        compress_index = False
+        if matrix in ('a', 'b', 'k'):
             size = get_data_size(inst_info['in_type'])
         else:
             size = get_data_size(inst_info['out_type'])
-        if matrix == 'a':
-            post_cbsz_abid_block = self._get_cbsz_abid_transformed_block(block, cbsz, abid)
-            (reg, lanes) = self.__get_input_reg_lanes(M, K, B, i, k,
-                                                      post_cbsz_abid_block, size, blgp)
+        if matrix in ('a', 'k'):
+            # For 4:2 structural sparsity, on the A matrix the k dimension fits
+            # 2 values in what would have traditionally been 4 storage locations
+            # We thus cut K in half for calculating the register and lane, because
+            # we don't need half of the registers a normal M*K calculation would
+            # give you. We also need to cut k in half because the user requested
+            # a k based on that original value, so we need to scale it too.
+            # However, we use 'k_to_calc' because we need the original 'k' for
+            # string that is returned to the screen.
+            if inst_info['sparse']:
+                K = int(K / 2)
+                k_to_calc = int(k / 2)
+                post_cbsz_abid_block = block
+                sparse = True
+            else:
+                post_cbsz_abid_block = self._get_cbsz_abid_transformed_block(block, cbsz, abid)
+                k_to_calc = k
+            if matrix == 'k':
+                compress_index = True
+                (reg, lanes) = self.__get_input_reg_lanes(M, K, B, i, k_to_calc,
+                                                          post_cbsz_abid_block, size, sparse,
+                                                          compress_index, cbsz, abid, blgp)
+            else:
+                (reg, lanes) = self.__get_input_reg_lanes(M, K, B, i, k_to_calc,
+                                                          post_cbsz_abid_block, size, sparse,
+                                                          compress_index, 0, 0, blgp)
             element_name = f"{matrix.upper()}[{i}][{k}]"
         elif matrix == 'b':
-            (reg, lanes) = self.__get_input_reg_lanes(N, K, B, j, k, block, size, blgp)
+            (reg, lanes) = self.__get_input_reg_lanes(N, K, B, j, k, block, size, sparse,
+                                                      compress_index, 0, 0, blgp)
             element_name = f"{matrix.upper()}[{k}][{j}]"
         else: # (matrix == 'c' or matrix == 'd'):
             (reg, lanes) = self.__get_output_reg_lanes(M, N, i, j, block, size)
@@ -3508,7 +4893,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c or d
+                a, b, c, d, or k (for the compression index of sparse matrices)
             in_lanes: an integer that defines the number of contiguous lanes are used to hold
                 values of a matrix. On gfx9, this is always 64, so the default of this
                 argument is 64.
@@ -3536,7 +4921,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a or b
+                a, b, or k (for the compression index of sparse matrices)
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
@@ -3547,34 +4932,41 @@ class InstCalcGfx9(InstCalc):
         num_gprs = self._get_instruction_num_gprs(matrix)
 
         ret_string = "Unknown"
-        # We do not need a sub-register, so no reason to print anything but reg 0
-        if (in_size == 32 and num_gprs == 1):
-            ret_string = '0'
-        elif in_size == 64:
-            ret_string = '[1:0]'
-        elif (in_size == 32 and num_gprs == 2):
-            ret_string = '(k % 2)'
-        elif num_gprs == 1:
-            if (in_size == 16 and K == 2):
-                ret_string = '0.[16*k+15 : 16*k]'
-            elif (in_size == 16 and K >= 4):
-                ret_string = '0.[16*(k % 2)+15 : 16*(k % 2)]'
-            elif (in_size == 8 and K <= 4):
-                ret_string = '0.[8*k+7 : 8*k]'
-            elif (in_size == 8 and K > 4):
-                ret_string = '0.[8*(k % 4)+7 : 8*(k % 4)]'
-        elif num_gprs == 2:
-            if (in_size == 16 and K <= 4):
-                ret_string = 'floor(k / 2).[16*(k % 2)+15 : 16*(k % 2)]'
-            elif (in_size == 16 and K <= 16):
-                ret_string = '(floor(k / 2) % 2).[16*(k % 2)+15 : 16*(k % 2)]'
-            elif in_size == 8:
-                ret_string = '(floor(k / 4) % 2).[8*(k % 4)+7 : 8*(k % 4)]'
-        else:
+        normal_a = (matrix == 'a' and not inst_info['sparse'])
+        if (normal_a or matrix == 'b'):
+            # We do not need a sub-register, so no reason to print anything but reg 0
+            if (in_size == 32 and num_gprs == 1):
+                ret_string = '0'
+            elif in_size == 64:
+                ret_string = '[1:0]'
+            elif (in_size == 32 and num_gprs == 2):
+                ret_string = '(k % 2)'
+            elif num_gprs == 1:
+                if (in_size == 16 and K == 2):
+                    ret_string = '0.[16*k+15 : 16*k]'
+                elif (in_size == 16 and K >= 4):
+                    ret_string = '0.[16*(k % 2)+15 : 16*(k % 2)]'
+                elif (in_size == 8 and K <= 4):
+                    ret_string = '0.[8*k+7 : 8*k]'
+                elif (in_size == 8 and K > 4):
+                    ret_string = '0.[8*(k % 4)+7 : 8*(k % 4)]'
+            elif num_gprs == 2:
+                if (in_size == 16 and K <= 4):
+                    ret_string = 'floor(k / 2).[16*(k % 2)+15 : 16*(k % 2)]'
+                elif (in_size == 16 and K <= 16):
+                    ret_string = '(floor(k / 2) % 2).[16*(k % 2)+15 : 16*(k % 2)]'
+                elif in_size == 8:
+                    ret_string = '(floor(k / 4) % 2).[8*(k % 4)+7 : 8*(k % 4)]'
+            else:
+                if in_size == 16:
+                    ret_string = '(k % 4).[16*(k % 2)+15 : 16*(k % 2)]'
+                elif in_size == 8:
+                    ret_string = '(floor(k / 4) % 4).[8*(k % 4)+7 : 8*(k % 4)]'
+        else: # sparse a
             if in_size == 16:
-                ret_string = '(k % 4).[16*(k % 2)+15 : 16*(k % 2)]'
-            elif in_size == 8:
-                ret_string = '(floor(k / 4) % 4).[8*(k % 4)+7 : 8*(k % 4)]'
+                ret_string = '(floor(k / 4) % 2)'
+            else:
+                ret_string = '(floor(k / 8) % 2).[16*(floor(k / 4) % 2)+15 : 16*(floor(k / 4) % 2)]'
         return ret_string
 
     def _coord_to_output_reg_eqn(self) -> str:
@@ -3623,12 +5015,13 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, or k (for the compression index of sparse matrices)
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
         """
         inst_info = self.inst_info
+        in_size = get_data_size(inst_info['in_type'])
         out_type = inst_info['out_type']
         M = inst_info['m']
         N = inst_info['n']
@@ -3652,6 +5045,9 @@ class InstCalcGfx9(InstCalc):
                 ret_string += 'i'
             else:
                 ret_string += 'j'
+        elif matrix == 'k':
+            contig_vals = int(32 / in_size) * 4
+            ret_string = f"{M} * floor(k / {contig_vals}) + i"
         else: # c or d
             ret_string = ""
             if out_type != 'fp64':
@@ -3673,7 +5069,8 @@ class InstCalcGfx9(InstCalc):
         register and lane.
 
         Will always print A[], B[], and D[]. If the instruction allows C[] matrices, then it will
-        print D[] as "C or D[i][j]".
+        print D[] as "C or D[i][j]". For sparse instructions, may also print the compression
+        matrix.
 
         Args:
             block: string that contains text to place in the matrix entry map for blocks.
@@ -3686,18 +5083,18 @@ class InstCalcGfx9(InstCalc):
         """ Returns equation to map register+lane to i index.
 
         Takes instruction info and returns a string containing an equation which lets users
-        calculate the i coordinate for the A, C, or D matrices.
+        calculate the i coordinate for the A, C, D, or compression index matrices.
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, c, or d
+                a, c, d, or k (for the compression index of sparse matrices)
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
             an input matrix held by a particular register and lane combination.
         """
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
-        if matrix not in ('a', 'b'):
+        if matrix not in ('a', 'b', 'k'):
             inst_info = self.inst_info
             M = inst_info['m']
             out_type = inst_info['out_type']
@@ -3726,7 +5123,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a or b
+                a, b, and k (for the compression index of sparse matrics)
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
@@ -3736,26 +5133,45 @@ class InstCalcGfx9(InstCalc):
         in_gprs = self._get_instruction_num_gprs(matrix)
         data_type = inst_info['in_type']
         data_size = get_data_size(data_type)
+        sparse = inst_info['sparse'] and matrix in ('a', 'k')
         ret_string = ""
-        k_per_register = int(self._get_elements_per_gpr(data_size))
-        if inst_info['k'] == 1:
-            ret_string = "0"
-        elif data_type == 'fp64':
-            ret_string = 'floor(lane / 16)'
+        k_per_register = int(self._get_elements_per_gpr(data_size, sparse))
+        if not sparse:
+            if inst_info['k'] == 1:
+                ret_string = "0"
+            elif data_type == 'fp64':
+                ret_string = 'floor(lane / 16)'
+            else:
+                k_per_lane_skip = k_per_register * in_gprs
+                if k_per_lane_skip != 1 and k_per_lane_skip < inst_info['k']:
+                    ret_string = f"{k_per_lane_skip} * "
+                if k_per_lane_skip < inst_info['k']:
+                    ret_string += f"floor(lane / {inst_info['m']})"
+                if k_per_register != 1:
+                    if ret_string != "":
+                        ret_string += " + "
+                    if in_gprs > 1:
+                        ret_string += f"{k_per_register} * GPR_num + "
+                    ret_string += f"floor(GPR_bits / {data_size})"
+                elif in_gprs > 1:
+                    ret_string += " + GPR_num"
         else:
-            k_per_lane_skip = k_per_register * in_gprs
-            if k_per_lane_skip != 1 and k_per_lane_skip < inst_info['k']:
-                ret_string = f"{k_per_lane_skip} * "
-            if k_per_lane_skip < inst_info['k']:
-                ret_string += f"floor(lane / {inst_info['m']})"
-            if k_per_register != 1:
-                if ret_string != "":
-                    ret_string += " + "
-                if in_gprs > 1:
-                    ret_string += f"{k_per_register} * GPR_num + "
-                ret_string += f"floor(GPR_bits / {data_size})"
-            elif in_gprs > 1:
-                ret_string += " + GPR_num"
+            if matrix == 'a':
+                if data_size != 8:
+                    start_point = f"{k_per_register} * GPR_num"
+                    end_point = f"({start_point} + {k_per_register-1})"
+                    ret_string = f"{end_point} through {start_point}"
+                else:
+                    start_point = f"16 * floor(lane / {inst_info['m']}"
+                    start_point += ") + (8 * GPR_num) + (4 * floor(GPR_bits / 16))"
+                    end_point = f"{start_point} + 3"
+                    ret_string = f"{end_point}\nthrough\n{start_point}"
+            else: # matrix == 'k'
+                M = inst_info['m']
+                contig_vals = int(128 / data_size)
+                start_point = f"{contig_vals} * floor(lane / {M}) + 4 * floor(GPR_bits / 4)"
+                end_point = f"{start_point} + 3"
+                ret_string = f"{end_point}\nthrough\n{start_point}"
         return ret_string
 
     def _print_opcode(self, encoding_name="VOP3P-MAI"):
@@ -3811,9 +5227,15 @@ class InstCalcGfx9(InstCalc):
         print(f"        A matrix can use AccVGPRs: {True}")
         print(f"        B matrix can use ArchVGPRs: {True}")
         print(f"        B matrix can use AccVGPRs: {True}")
-        print(f"        C and D matrix can use ArchVGPRs: {self.inst_info['c_d_arch']}")
-        print(f"        C and D matrix can use AccVGPRs: {True}")
+        # Skip printing information about the C matrix if in a sparse matrix.
+        if not self.inst_info['sparse']:
+            print(f"        C and D matrix can use ArchVGPRs: {self.inst_info['c_d_arch']}")
+            print(f"        C and D matrix can use AccVGPRs: {True}")
+        else:
+            print(f"        D matrix can use ArchVGPRs: {self.inst_info['c_d_arch']}")
+            print(f"        D matrix can use AccVGPRs: {True}")
         print("    Register modifiers:")
+        print(f"        Sparse A matrix: {self.inst_info['sparse']}")
         print(f"        CBSZ and ABID bits supported: {self.inst_info['cbsz_abid']}")
         print(f"        BLGP bits supported: {self.inst_info['blgp']}")
 
@@ -3879,7 +5301,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+                a, b, c, d, and k (for the compression index of sparse matrics)
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
@@ -3985,7 +5407,7 @@ class InstCalcGfx11(InstCalc):
                 hold the element.
             Tuple: (register holding the matrix entry, lanes within that register)
         """
-        reg = self._get_reg_name(data_size, k)
+        reg = self._get_reg_name(data_size, False, False, 0, 0, k)
 
         # Odd columns are actually stored 16 lanes later
         lanes_to_ret = []
@@ -4027,7 +5449,7 @@ class InstCalcGfx11(InstCalc):
         rows_per_reg_slot = self.wave_width / 16
         skip_half = 2 if data_size == 16 else 1
         regno = int(skip_half * int(i / rows_per_reg_slot)) + (opsel>>2)
-        reg = self._get_reg_name(data_size, regno)
+        reg = self._get_reg_name(data_size, False, False, 0, 0, regno)
 
         # Output lanes are 16 elements wide, and depending on the wave size,
         # this ends up meaning we walk over a different number of lanes before
@@ -4050,9 +5472,9 @@ class InstCalcGfx11(InstCalc):
 
         Args:
             matrix: String indicating the matrix to query: 'a', 'b', 'c', or 'd'
-            i: integer coordinate for the query of the matrix row for A, C, & D matrices
+            i: integer coordinate for the query of the matrix row for A, C, D, & K matrices
             j: integer coordinate for the query of the matrix column for the B, C, & D matrices
-            k: integer coordinate for the query of the A column or B row
+            k: integer coordinate for the query of the A & K column or B row
             block: integer coordinate for the block to query
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
@@ -4351,7 +5773,7 @@ class InstCalcGfx11(InstCalc):
             an input matrix held by a particular register and lane combination.
         """
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
-        if matrix not in ('a', 'b'):
+        if matrix not in ('a', 'b', 'k'):
             ret_string = "(wave_width / 16) * GPR_num + floor(lane / 16)"
             if get_data_size(self.inst_info['out_type']) == 16:
                 ret_string = f"({ret_string}).[15:0]"
