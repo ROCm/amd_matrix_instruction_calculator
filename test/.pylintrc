@@ -72,3 +72,4 @@ ignore-comments=yes
 ignore-docstrings=yes
 ignore-imports=no
 defining-attr-methods=__init__
+load-plugins=pylint.extensions.no_self_use

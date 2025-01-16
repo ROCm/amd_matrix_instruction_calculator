@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 #
-# Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -70,7 +70,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.1"
+VERSION = "1.1.1"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -2505,7 +2505,7 @@ def parse_and_run() -> int:
     """
     invert_isa: Dict[str, List[str]] = {}
     for key, value in dict_isas.items():
-        invert_isa.setdefault(value, list()).append(key)
+        invert_isa.setdefault(value, []).append(key)
     list_of_archs = ""
     for arch in dict_insts:
         list_of_archs += arch.upper()
@@ -2758,7 +2758,14 @@ def parse_and_run() -> int:
         return -2
 
     mats = [args.A_matrix, args.B_matrix, args.C_matrix, args.D_matrix, args.compression]
-    if mats.count(True) != 1:
+
+    mat_names = ['a', 'b', 'c', 'd', 'k']
+    matrix_to_use = None
+    for (which, name) in zip(mats, mat_names):
+        if which:
+            matrix_to_use = name
+
+    if matrix_to_use is None or mats.count(True) != 1:
         print("For the chosen option, '", end="", file=sys.stderr)
         if args.get_register:
             print("--get-register", end="", file=sys.stderr)
@@ -2772,11 +2779,6 @@ def parse_and_run() -> int:
               "one of: '--A-matrix', '--B-matrix', '--C-matrix', '--D-matrix', " +
               "or '--compression'", file=sys.stderr)
         return -2
-
-    mat_names = ['a', 'b', 'c', 'd', 'k']
-    for (which, name) in zip(mats, mat_names):
-        if which:
-            matrix_to_use = name
 
     if (args.output_calc and matrix_to_use != 'd'):
         print("The option '--output-calculation' is only possible for the D matrix.",
@@ -3378,7 +3380,7 @@ class InstCalc(metaclass=ABCMeta):
         """
         mat_lo = f"{matrix}_lo"
         mat_hi = f"{matrix}_hi"
-        if matrix == 'c' and negate['c_abs']:
+        if matrix.lower() == 'c' and negate['c_abs']:
             mat_val = f"|{mat_val}|"
         if (negate[matrix] or
                 (negate[mat_lo] and re.search("15:0", reg)) or
@@ -3535,7 +3537,7 @@ class InstCalc(metaclass=ABCMeta):
                                    Maximum value of column for {inst} is {inst_info['n'] - 1}."""))
             raise ValueError(err_line)
         if k >= inst_info['k']:
-            if matrix == 'b':
+            if matrix.lower() == 'b':
                 val_name = "row"
             else:
                 val_name = "column"
@@ -3552,7 +3554,7 @@ class InstCalc(metaclass=ABCMeta):
         # Calculate register and lane based on matrix layout
         (element_name, reg, lanes) = self._get_reg_lanes(matrix, i, j, k, block,
                                                          cbsz, abid, blgp, opsel)
-        if (matrix == 'd' and out_calc):
+        if (matrix.lower() == 'd' and out_calc):
             source_string = self.__calculate_source_string(element_name, False, negate, cbsz, abid,
                                                            blgp, opsel)
             for lane in lanes:
@@ -3591,9 +3593,9 @@ class InstCalc(metaclass=ABCMeta):
         K = inst_info['k']
 
         register_dict: Dict[str, List[str]] = {}
-        if matrix in ('a', 'k'):
+        if matrix.lower() in ('a', 'k'):
             N = 1
-        elif matrix == 'b':
+        elif matrix.lower() == 'b':
             M = 1
         else: # 'c' or 'd'
             K = 1
@@ -3715,7 +3717,7 @@ class InstCalc(metaclass=ABCMeta):
         inst_info = self.inst_info
         in_type = inst_info['in_type']
         out_type = inst_info['out_type']
-        sparse = inst_info['sparse'] and (matrix in ('a', 'k'))
+        sparse = inst_info['sparse'] and (matrix.lower() in ('a', 'k'))
 
         orig_cbsz = cbsz
         orig_abid = abid
@@ -3747,12 +3749,12 @@ class InstCalc(metaclass=ABCMeta):
         # (64b values).  So calculating the total number of VGPRs required
         # by a matrix requires knowing how many elements of the matrix we
         # can fit in a VGPR.
-        if matrix in ('a', 'b', 'k'):
+        if matrix.lower() in ('a', 'b', 'k'):
             data_size = get_data_size(in_type)
-            if matrix == 'a':
+            if matrix.lower() == 'a':
                 gpr_ratio = self._get_elements_per_gpr(data_size, sparse)
                 total_gprs = self._get_instruction_num_gprs(matrix)
-            elif matrix == 'k':
+            elif matrix.lower() == 'k':
                 gpr_ratio = self._get_elements_per_gpr(data_size, sparse)
                 total_gprs = 1
             else:
@@ -3789,16 +3791,17 @@ class InstCalc(metaclass=ABCMeta):
             gpr_ratio /= 2
 
         num_printed = 0
-        if matrix == 'k':
+        if matrix.lower() == 'k':
             num_regnos_to_print *= 2
         while num_printed < num_regnos_to_print:
             regno = int(reg * gpr_ratio) + int(offset)
-            base_gpr_name = self._get_reg_name(data_size, sparse, matrix == 'k', cbsz, abid, regno)
+            is_k = matrix.lower() == 'k'
+            base_gpr_name = self._get_reg_name(data_size, sparse, is_k, cbsz, abid, regno)
             gpr_lane_name = self.__format_reg_lane(base_gpr_name, lane)
             if gpr_lane_name not in register_dict:
-                if ((matrix in ('a', 'k')) and cbsz != 0):
+                if ((matrix.lower() in ('a', 'k')) and cbsz != 0):
                     print(f"Due to instruction modifiers CBSZ and ABID, lane {lane} ", end="")
-                elif (matrix == 'b' and blgp != 0):
+                elif (matrix.lower() == 'b' and blgp != 0):
                     print(f"Due to instruction modifier BLGP, lane {lane} ", end="")
                 else:
                     raise ValueError("An attempt to print too many registers has failed in an "
@@ -3808,7 +3811,7 @@ class InstCalc(metaclass=ABCMeta):
             entry_list = register_dict[gpr_lane_name]
             for entry in entry_list:
                 print(gpr_lane_name + " = ", end="")
-                if (matrix == 'd' and out_calc):
+                if (matrix.lower() == 'd' and out_calc):
                     source_string = self.__calculate_source_string(entry, True, negate, orig_cbsz,
                                                                    orig_abid, orig_blgp, opsel)
                     print(f"{entry} = {source_string}")
@@ -3838,7 +3841,7 @@ class InstCalc(metaclass=ABCMeta):
             two entries in each "regno" slot, so only move the regno value by 1 only after
             printing twice.
         """
-        if ((self.inst_info['sparse'] and matrix == 'a') or matrix == 'k'):
+        if ((self.inst_info['sparse'] and matrix.lower() == 'a') or matrix.lower() == 'k'):
             ret_this = 0.5
         else:
             ret_this = 1
@@ -3942,12 +3945,12 @@ class InstCalc(metaclass=ABCMeta):
         join_char = self.__get_join_char(requested_output)
 
         for b in range(B):
-            if matrix in ('a', 'k'):
+            if matrix.lower() in ('a', 'k'):
                 if print_blocks:
                     # By setting CBSZ and ABID, it is possible to have mutliple blocks
                     # of the matrix math stored in a single register. So we want to
                     # print them as a single group.
-                    if matrix == 'a':
+                    if matrix.lower() == 'a':
                         if b % math.pow(2, cbsz) != 0:
                             continue
                         block_list = []
@@ -3980,7 +3983,7 @@ class InstCalc(metaclass=ABCMeta):
                             to_append.append(self.__neg_abs_name(reg, reglane, matrix, negate))
                         row_tab.append(join_char.join(to_append))
                     table_to_print.append(row_tab)
-            elif matrix == 'b':
+            elif matrix.lower() == 'b':
                 if print_blocks:
                     print(f"Block {b}")
                 if not transpose:
@@ -4002,7 +4005,7 @@ class InstCalc(metaclass=ABCMeta):
                             to_append.append(self.__neg_abs_name(reg, reglane, matrix, negate))
                         row_tab.append(join_char.join(to_append))
                     table_to_print.append(row_tab)
-            else: #matrix == 'c' or 'd'
+            else: # matrix.lower() == 'c' or matrix.lower() == 'd'
                 if print_blocks:
                     print(f"Block {b}")
                 if not transpose:
@@ -4064,19 +4067,19 @@ class InstCalc(metaclass=ABCMeta):
         B = inst_info['blocks']
         in_type = inst_info['in_type']
         out_type = inst_info['out_type']
-        sparse = inst_info['sparse'] and (matrix in ('a', 'k'))
+        sparse = inst_info['sparse'] and (matrix.lower() in ('a', 'k'))
         join_char = self.__get_join_char(requested_output)
 
         register_dict = self.__create_register_dict(matrix, cbsz, abid, blgp, opsel)
 
-        if matrix in ('a', 'k'):
+        if matrix.lower() in ('a', 'k'):
             data_size = get_data_size(in_type)
             # In sparse matrices, there are only half as many registers
             # due to the 4:2 compression.
             if sparse:
                 K = int(K / 2)
             total_gpr_slots = int(M * K * B / contig_values)
-        elif matrix == 'b':
+        elif matrix.lower() == 'b':
             data_size = get_data_size(in_type)
             total_gpr_slots = int(N * K * B / contig_values)
         else:
@@ -4091,7 +4094,7 @@ class InstCalc(metaclass=ABCMeta):
             lane = self._get_blgp_transformed_lane(lane, blgp)
             row_tab = [str(lane)]
             for regno in range(total_gpr_slots):
-                base_gpr_name = self._get_reg_name(data_size, sparse, matrix == 'k',
+                base_gpr_name = self._get_reg_name(data_size, sparse, matrix.lower() == 'k',
                                                    cbsz, abid, regno)
                 gpr_lane_name = self.__format_reg_lane(base_gpr_name, lane)
                 # If we have CBSZ and ABID set, some lanes may not exist in this
@@ -4127,7 +4130,7 @@ class InstCalc(metaclass=ABCMeta):
             # register slots. Now skip every other one because we will
             # fill them with 4 matrix entries.
             if (not sparse or regno % 2 == 0):
-                header.append(self._get_reg_name(data_size, sparse, matrix == 'k',
+                header.append(self._get_reg_name(data_size, sparse, matrix.lower() == 'k',
                                                  cbsz, abid, regno))
 
         deduplicated = []
@@ -4148,7 +4151,7 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             matrix: string that contains the name of the matrix. Legal values are
                 a, b, c, d, or k (for the compression index of sparse matrices)
-            in_lanes: an integer that defines the number of contiguous lanes are used to hold
+            in_lanes: an integer that defines the number of contiguous lanes that are used to hold
                 values of a matrix. If this is not passed in, the argument is matched to the
                 wavefront size of the target architecture.
             out_size: The number of bits used to hold output values for this instruction.
@@ -4162,9 +4165,9 @@ class InstCalc(metaclass=ABCMeta):
         """
         inst_info = self.inst_info
         if in_lanes is None:
-            in_lanes = 64
-        sparse_op = (matrix == 'a' and inst_info['sparse'])
-        if matrix in ('a', 'b'):
+            in_lanes = self.wave_width
+        sparse_op = (matrix.lower() == 'a' and inst_info['sparse'])
+        if matrix.lower() in ('a', 'b'):
             lanes_used = int(in_lanes)
             gpr_ratio = self._get_elements_per_gpr(get_data_size(inst_info['in_type']), sparse_op)
         else:
@@ -4172,15 +4175,15 @@ class InstCalc(metaclass=ABCMeta):
                 out_size = get_data_size(inst_info['out_type'])
             lanes_used = int(self.wave_width)
             gpr_ratio = self._get_elements_per_gpr(out_size, False)
-        if matrix in ('a', 'c', 'd'):
+        if matrix.lower() in ('a', 'c', 'd'):
             rows = inst_info['m']
         else:
             rows = inst_info['k']
-        if matrix in ('b', 'c', 'd'):
+        if matrix.lower() in ('b', 'c', 'd'):
             cols = inst_info['n']
         else:
             cols = inst_info['k']
-        return int(rows * cols * inst_info['blocks'] / (lanes_used * gpr_ratio))
+        return int(math.ceil(rows * cols * inst_info['blocks'] / (lanes_used * gpr_ratio)))
 
     @abstractmethod
     def _coord_to_input_reg_eqn(self, matrix: str) ->str:
@@ -4230,9 +4233,9 @@ class InstCalc(metaclass=ABCMeta):
         Returns:
             String that contains the simple formula mapping coordinates to registers
         """
-        if matrix in ('a', 'b'):
+        if matrix.lower() in ('a', 'b'):
             ret_str = self._coord_to_input_reg_eqn(matrix)
-        elif matrix == 'k':
+        elif matrix.lower() == 'k':
             data_size = get_data_size(self.inst_info['in_type'])
             contig_vals = int(32 / data_size)
             ret_str = f"0.[4*(floor(k / 4) % {contig_vals})+3 : 4*(floor(k / 4) % {contig_vals})]"
@@ -4323,9 +4326,9 @@ class InstCalc(metaclass=ABCMeta):
             an input matrix held by a particular register and lane combination.
         """
         ret_string = "Unknown" # c and d matrix must be handled by child classes
-        if matrix == 'a':
+        if matrix.lower() == 'a':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
-        elif matrix == 'k':
+        elif matrix.lower() == 'k':
             ret_string = f"(lane % {self.inst_info['m']})"
         return ret_string
 
@@ -4361,7 +4364,7 @@ class InstCalc(metaclass=ABCMeta):
             A string which contains the equation to calculate the j coordinate held by a
             particular register and lane combination.
         """
-        if matrix == 'b':
+        if matrix.lower() == 'b':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
         else: # c or d
             ret_string = self.__reg_lane_to_output_j_coord_eqn()
@@ -4845,11 +4848,11 @@ class InstCalcGfx9(InstCalc):
         # Leave these as false out here, in case we are checking against matrix B
         sparse = False
         compress_index = False
-        if matrix in ('a', 'b', 'k'):
+        if matrix.lower() in ('a', 'b', 'k'):
             size = get_data_size(inst_info['in_type'])
         else:
             size = get_data_size(inst_info['out_type'])
-        if matrix in ('a', 'k'):
+        if matrix.lower() in ('a', 'k'):
             # For 4:2 structural sparsity, on the A matrix the k dimension fits
             # 2 values in what would have traditionally been 4 storage locations
             # We thus cut K in half for calculating the register and lane, because
@@ -4866,7 +4869,7 @@ class InstCalcGfx9(InstCalc):
             else:
                 post_cbsz_abid_block = self._get_cbsz_abid_transformed_block(block, cbsz, abid)
                 k_to_calc = k
-            if matrix == 'k':
+            if matrix.lower() == 'k':
                 compress_index = True
                 (reg, lanes) = self.__get_input_reg_lanes(M, K, B, i, k_to_calc,
                                                           post_cbsz_abid_block, size, sparse,
@@ -4876,11 +4879,11 @@ class InstCalcGfx9(InstCalc):
                                                           post_cbsz_abid_block, size, sparse,
                                                           compress_index, 0, 0, blgp)
             element_name = f"{matrix.upper()}[{i}][{k}]"
-        elif matrix == 'b':
+        elif matrix.lower() == 'b':
             (reg, lanes) = self.__get_input_reg_lanes(N, K, B, j, k, block, size, sparse,
                                                       compress_index, 0, 0, blgp)
             element_name = f"{matrix.upper()}[{k}][{j}]"
-        else: # (matrix == 'c' or matrix == 'd'):
+        else: # (matrix.lower() == 'c' or matrix.lower() == 'd'):
             (reg, lanes) = self.__get_output_reg_lanes(M, N, i, j, block, size)
             element_name = f"{matrix.upper()}[{i}][{j}]"
         if B > 1:
@@ -4894,7 +4897,7 @@ class InstCalcGfx9(InstCalc):
         Args:
             matrix: string that contains the name of the matrix. Legal values are
                 a, b, c, d, or k (for the compression index of sparse matrices)
-            in_lanes: an integer that defines the number of contiguous lanes are used to hold
+            in_lanes: an integer that defines the number of contiguous lanes that are used to hold
                 values of a matrix. On gfx9, this is always 64, so the default of this
                 argument is 64.
             out_size: The number of bits used to hold output values for this instruction.
@@ -4932,8 +4935,8 @@ class InstCalcGfx9(InstCalc):
         num_gprs = self._get_instruction_num_gprs(matrix)
 
         ret_string = "Unknown"
-        normal_a = (matrix == 'a' and not inst_info['sparse'])
-        if (normal_a or matrix == 'b'):
+        normal_a = (matrix.lower() == 'a' and not inst_info['sparse'])
+        if (normal_a or matrix.lower() == 'b'):
             # We do not need a sub-register, so no reason to print anything but reg 0
             if (in_size == 32 and num_gprs == 1):
                 ret_string = '0'
@@ -5029,7 +5032,7 @@ class InstCalcGfx9(InstCalc):
         blocks = inst_info['blocks']
 
         ret_string = "Unknown"
-        if matrix in ('a', 'b'):
+        if matrix.lower() in ('a', 'b'):
             if blocks > 1:
                 ret_string = f"{M} * block + "
             else:
@@ -5041,11 +5044,11 @@ class InstCalcGfx9(InstCalc):
                     ret_string += " * k + "
                 else:
                     ret_string += f" * floor(k / {div_val}) + "
-            if matrix == 'a':
+            if matrix.lower() == 'a':
                 ret_string += 'i'
             else:
                 ret_string += 'j'
-        elif matrix == 'k':
+        elif matrix.lower() == 'k':
             contig_vals = int(32 / in_size) * 4
             ret_string = f"{M} * floor(k / {contig_vals}) + i"
         else: # c or d
@@ -5133,7 +5136,7 @@ class InstCalcGfx9(InstCalc):
         in_gprs = self._get_instruction_num_gprs(matrix)
         data_type = inst_info['in_type']
         data_size = get_data_size(data_type)
-        sparse = inst_info['sparse'] and matrix in ('a', 'k')
+        sparse = inst_info['sparse'] and matrix.lower() in ('a', 'k')
         ret_string = ""
         k_per_register = int(self._get_elements_per_gpr(data_size, sparse))
         if not sparse:
@@ -5156,7 +5159,7 @@ class InstCalcGfx9(InstCalc):
                 elif in_gprs > 1:
                     ret_string += " + GPR_num"
         else:
-            if matrix == 'a':
+            if matrix.lower() == 'a':
                 if data_size != 8:
                     start_point = f"{k_per_register} * GPR_num"
                     end_point = f"({start_point} + {k_per_register-1})"
@@ -5166,7 +5169,7 @@ class InstCalcGfx9(InstCalc):
                     start_point += ") + (8 * GPR_num) + (4 * floor(GPR_bits / 16))"
                     end_point = f"{start_point} + 3"
                     ret_string = f"{end_point}\nthrough\n{start_point}"
-            else: # matrix == 'k'
+            else: # matrix.lower() == 'k'
                 M = inst_info['m']
                 contig_vals = int(128 / data_size)
                 start_point = f"{contig_vals} * floor(lane / {M}) + 4 * floor(GPR_bits / 4)"
@@ -5307,7 +5310,7 @@ class InstCalcGfx9(InstCalc):
             A string which contains the equation to calculate the block held by a particular
             register and lane combination.
         """
-        if matrix in ('a', 'b'):
+        if matrix.lower() in ('a', 'b'):
             ret_string = self.__reg_lane_to_input_block_eqn()
         else:
             ret_string = self.__reg_lane_to_output_block_eqn()
@@ -5362,9 +5365,6 @@ class InstCalcGfx11(InstCalc):
 
     def _find_matching_b_lane(self, a_lane: int, b_lanes: List[int]) -> int:
         """ Finds the lane in a list of B matrix lanes that match the A matirx lane.
-
-        This is an abstract method, and should be filled in by any child class to
-        actually calculate this data for the target architecture.
 
         In some architectures, matrix values can exist simultaneously in multiple
         lanes. Or, more specifically, multiple lanes must store the same value from
@@ -5493,17 +5493,17 @@ class InstCalcGfx11(InstCalc):
         inst_info = self.inst_info
         N = inst_info['n']
 
-        if matrix in ('a', 'b'):
+        if matrix.lower() in ('a', 'b'):
             size = get_data_size(inst_info['in_type'])
         else:
             size = get_data_size(inst_info['out_type'])
-        if matrix == 'a':
+        if matrix.lower() == 'a':
             (reg, lanes) = self.__get_input_reg_lanes(i, k, size)
             element_name = f"{matrix.upper()}[{i}][{k}]"
-        elif matrix == 'b':
+        elif matrix.lower() == 'b':
             (reg, lanes) = self.__get_input_reg_lanes(j, k, size)
             element_name = f"{matrix.upper()}[{k}][{j}]"
-        else: # (matrix == 'c' or matrix == 'd'):
+        else: # (matrix.lower() == 'c' or matrix.lower() == 'd'):
             (reg, lanes) = self.__get_output_reg_lanes(N, i, j, size, opsel)
             element_name = f"{matrix.upper()}[{i}][{j}]"
         return (element_name, reg, lanes)
@@ -5534,7 +5534,7 @@ class InstCalcGfx11(InstCalc):
         Returns:
             Integer which indicates the regno offset for this matrix+OPSEL pair
         """
-        if (matrix in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16 and
+        if (matrix.lower() in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16 and
                 opsel == 4):
             offset = 1
         else:
@@ -5566,7 +5566,7 @@ class InstCalcGfx11(InstCalc):
         Returns:
             Integer indicating how many of the regnos in each GPR to print
         """
-        if (matrix in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16):
+        if (matrix.lower() in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16):
             num_regnos_to_print = math.ceil(gpr_ratio/2)
         else:
             num_regnos_to_print = math.ceil(gpr_ratio)
@@ -5652,7 +5652,7 @@ class InstCalcGfx11(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix. Legal values are a, b, c, or d
-            in_lanes: an integer that defines the number of contiguous lanes are used to hold
+            in_lanes: an integer that defines the number of contiguous lanes that are used to hold
                 values of a matrix. On gfx11, this is always 16, so the default of this
                 argument is 16.
             out_size: The number of bits used to hold output values for this instruction.
@@ -5794,7 +5794,7 @@ class InstCalcGfx11(InstCalc):
             A string which contains the equation to calculate the k coordinate held by a
             particular register and lane combination.
         """
-        del matrix # Unused on gfx11, both input matrices have the same layout
+        del matrix # Unused in gfx11, both input matrices have the same layout
         data_size = get_data_size(self.inst_info['in_type'])
         if data_size == 16:
             ret_string = "2 * GPR_num + floor(GPR_bits / 16)"
