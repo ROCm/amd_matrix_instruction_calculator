@@ -70,7 +70,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -3516,6 +3516,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Raises:
             ValueError: An i/j/k/block coordinate was not valid for this instruction
+                or an unsupported matrix type was requested.
         """
         inst_info = self.inst_info
         inst = self.inst_name
@@ -3551,6 +3552,9 @@ class InstCalc(metaclass=ABCMeta):
                                    f"""{inst_info['blocks'] - 1}."""))
             raise ValueError(err_line)
 
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         # Calculate register and lane based on matrix layout
         (element_name, reg, lanes) = self._get_reg_lanes(matrix, i, j, k, block,
                                                          cbsz, abid, blgp, opsel)
@@ -3585,7 +3589,13 @@ class InstCalc(metaclass=ABCMeta):
             Dictionary of register-lane string keys that map to lists of matrix entry strings
             If the VGPR is used for multiple matrix entries (e.g., due to modifiers pushing the
             VGPR's data to multiple matrix inputs), the list of strings may be >1 entry.
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         inst_info = self.inst_info
         B = inst_info['blocks']
         M = inst_info['m']
@@ -3674,8 +3684,12 @@ class InstCalc(metaclass=ABCMeta):
 
         Returns:
             Integer indicating how many of the regnos in each GPR to print
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
-        del matrix # unused in base instruction class
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         return math.ceil(gpr_ratio)
 
     def calculate_single_location(self, matrix: str, out_calc: bool, negate: Dict[str, bool],
@@ -3713,6 +3727,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Raises:
             ValueError: An i/j/k/block coordinate was not valid for this instruction
+                or an unsupported matrix was requested.
         """
         inst_info = self.inst_info
         in_type = inst_info['in_type']
@@ -3743,6 +3758,9 @@ class InstCalc(metaclass=ABCMeta):
             if lane not in transforms:
                 raise ValueError(f"BLGP input of {blgp} means that lane {lane} "
                                  "will not be used by this instruction.")
+
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
 
         # First, each register is held in a storage location that may be a
         # VGPR (32b values), part of a VGPR (<32b values) or multiple VGPRs
@@ -3840,7 +3858,12 @@ class InstCalc(metaclass=ABCMeta):
             Floating point scaling calculation, e.g. a value of 0.5 indicates that there are
             two entries in each "regno" slot, so only move the regno value by 1 only after
             printing twice
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         if ((self.inst_info['sparse'] and matrix.lower() == 'a') or matrix.lower() == 'k'):
             ret_this = 0.5
         else:
@@ -3936,7 +3959,13 @@ class InstCalc(metaclass=ABCMeta):
             transpose: boolean set to true to cause the matrix to be printed transposed
             print_blocks: boolean set to true if this architecture and instruction
                 should print the word "Block #" above each block of the matrix
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         inst_info = self.inst_info
         M = inst_info['m']
         N = inst_info['n']
@@ -4059,7 +4088,13 @@ class InstCalc(metaclass=ABCMeta):
             transpose: boolean set to true to cause the matrix to be printed transposed
             contig_values: an integer that defines the number of contiguous values of a
                 register that are used to hold unique values of a matrix
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         inst_info = self.inst_info
         M = inst_info['m']
         N = inst_info['n']
@@ -4162,7 +4197,13 @@ class InstCalc(metaclass=ABCMeta):
 
         Returns:
             An integer that defines the number of GPRs needed to hold the requested matrix
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         inst_info = self.inst_info
         if in_lanes is None:
             in_lanes = self.wave_width
@@ -4232,13 +4273,15 @@ class InstCalc(metaclass=ABCMeta):
 
         Returns:
             String that contains the simple formula mapping coordinates to registers
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() in ('a', 'b'):
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
+        if matrix.lower() in ('a', 'b', 'k'):
             ret_str = self._coord_to_input_reg_eqn(matrix)
-        elif matrix.lower() == 'k':
-            data_size = get_data_size(self.inst_info['in_type'])
-            contig_vals = int(32 / data_size)
-            ret_str = f"0.[4*(floor(k / 4) % {contig_vals})+3 : 4*(floor(k / 4) % {contig_vals})]"
         else: # C/D matrices
             ret_str = self._coord_to_output_reg_eqn()
         return ret_str
@@ -4320,7 +4363,13 @@ class InstCalc(metaclass=ABCMeta):
         Returns:
             A string which contains the equation to calculate the i coordinate for
             an input matrix held by a particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         ret_string = "Unknown" # c and d matrix must be handled by child classes
         if matrix.lower() == 'a':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
@@ -4355,7 +4404,12 @@ class InstCalc(metaclass=ABCMeta):
         Returns:
             A string which contains the equation to calculate the j coordinate held by a
             particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('b', 'c', 'd'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         if matrix.lower() == 'b':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
         else: # c or d
@@ -4900,7 +4954,12 @@ class InstCalcGfx9(InstCalc):
 
         Returns:
             An integer that defines the number of GPRs needed to hold the requested matrix
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         # In gfx9, we always use all 64 lanes for input calculations, but output sizes
         # can change for 64b outputs
         if out_size is None:
@@ -4920,7 +4979,13 @@ class InstCalcGfx9(InstCalc):
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         inst_info = self.inst_info
         in_size = get_data_size(inst_info['in_type'])
         K = inst_info['k']
@@ -4957,6 +5022,10 @@ class InstCalcGfx9(InstCalc):
                     ret_string = '(k % 4).[16*(k % 2)+15 : 16*(k % 2)]'
                 elif in_size == 8:
                     ret_string = '(floor(k / 4) % 4).[8*(k % 4)+7 : 8*(k % 4)]'
+        elif matrix.lower() == 'k':
+            contig_vals = int(32 / in_size)
+            ret_string = f"0.[4*(floor(k / 4) % {contig_vals})+3 : "
+            ret_string += f"4*(floor(k / 4) % {contig_vals})]"
         else: # sparse a
             if in_size == 16:
                 ret_string = '(floor(k / 4) % 2)'
@@ -5014,7 +5083,13 @@ class InstCalcGfx9(InstCalc):
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         inst_info = self.inst_info
         in_size = get_data_size(inst_info['in_type'])
         out_type = inst_info['out_type']
@@ -5087,7 +5162,13 @@ class InstCalcGfx9(InstCalc):
         Returns:
             A string which contains the equation to calculate the i coordinate for
             an input matrix held by a particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
         if matrix not in ('a', 'b', 'k'):
             inst_info = self.inst_info
@@ -5123,7 +5204,13 @@ class InstCalcGfx9(InstCalc):
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
             particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+
         inst_info = self.inst_info
         in_gprs = self._get_instruction_num_gprs(matrix)
         data_type = inst_info['in_type']
@@ -5241,10 +5328,6 @@ class InstCalcGfx9(InstCalc):
         lane to the block of the input matrix. Targets a particular instruction,
         and does not handle modifiers.
 
-        Args:
-            matrix: string that contains the name of the matrix
-                Legal values are a, b, or k.
-
         Returns:
             A string which contains the equation to calculate the block held by a particular
             register and lane combination
@@ -5265,10 +5348,6 @@ class InstCalcGfx9(InstCalc):
         Return a string that can be used to quickly calculate how to go from a register and
         lane to the block of the output matrix. Targets a particular instruction,
         and does not handle modifiers.
-
-        Args:
-            matrix: string that contains the name of the matrix
-                Legal values are c or d.
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
@@ -5303,7 +5382,12 @@ class InstCalcGfx9(InstCalc):
         Returns:
             A string which contains the equation to calculate the block held by a particular
             register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         if matrix.lower() in ('a', 'b'):
             ret_string = self.__reg_lane_to_input_block_eqn()
         else:
@@ -5528,7 +5612,12 @@ class InstCalcGfx11(InstCalc):
 
         Returns:
             Integer which indicates the regno offset for this matrix+OPSEL pair
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         if (matrix.lower() in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16 and
                 opsel == 4):
             offset = 1
@@ -5561,7 +5650,12 @@ class InstCalcGfx11(InstCalc):
 
         Returns:
             Integer indicating how many of the regnos in each GPR to print
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         if (matrix.lower() in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16):
             num_regnos_to_print = math.ceil(gpr_ratio/2)
         else:
@@ -5677,8 +5771,12 @@ class InstCalcGfx11(InstCalc):
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
-        del matrix # Unused in gfx11
+        if matrix.lower() not in ('a', 'b'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         data_size = get_data_size(self.inst_info['in_type'])
         if data_size == 16:
             ret_string = 'floor(k / 2).[16*(k % 2)+15 : 16*(k % 2)]'
@@ -5716,7 +5814,12 @@ class InstCalcGfx11(InstCalc):
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'b', 'c', 'd'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         if matrix.lower() == 'a':
             ret_this = 'i and i+16. Also i+32 and i+48 in wave64.'
         elif matrix.lower() == 'b':
@@ -5770,7 +5873,12 @@ class InstCalcGfx11(InstCalc):
         Returns:
             A string which contains the equation to calculate the i coordinate for
             an input matrix held by a particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
+        if matrix.lower() not in ('a', 'c', 'd'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
         if matrix not in ('a', 'b', 'k'):
             ret_string = "(wave_width / 16) * GPR_num + floor(lane / 16)"
@@ -5792,8 +5900,12 @@ class InstCalcGfx11(InstCalc):
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
             particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
         """
-        del matrix # Unused in gfx11, both input matrices have the same layout
+        if matrix.lower() not in ('a', 'b'):
+            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         data_size = get_data_size(self.inst_info['in_type'])
         if data_size == 16:
             ret_string = "2 * GPR_num + floor(GPR_bits / 16)"
