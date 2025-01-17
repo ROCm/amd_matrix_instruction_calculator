@@ -70,7 +70,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.1.3"
+VERSION = "1.2"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -4227,7 +4227,7 @@ class InstCalc(metaclass=ABCMeta):
         return int(math.ceil(rows * cols * inst_info['blocks'] / (lanes_used * gpr_ratio)))
 
     @abstractmethod
-    def _coord_to_input_reg_eqn(self, matrix: str) ->str:
+    def _coord_to_input_reg_eqn(self, matrix: str, wave_size: Optional[int] = None) ->str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -4240,13 +4240,15 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion function
+                Some architectures change register equations for different wave sizes.
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
         """
 
     @abstractmethod
-    def _coord_to_output_reg_eqn(self) -> str:
+    def _coord_to_output_reg_eqn(self, wave_size: Optional[int] = None) -> str:
         """ Returns formula for mapping a matrix coordinate to its output register number.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -4256,11 +4258,15 @@ class InstCalc(metaclass=ABCMeta):
         This is an abstract method, because every architecture needs a different formula.
         Should be filled in by the architecture child classes.
 
+        Args:
+            wave_size: integer that holds the wave size for the requested conversion function
+                Some architectures change register equations for different wave sizes.
+
         Returns:
             String that contains the simple formula mapping coordinates to output registers
         """
 
-    def __coord_to_reg_eqn(self, matrix: str) -> str:
+    def __coord_to_reg_eqn(self, matrix: str, wave_size: Optional[int] = None) -> str:
         """ Returns formula for mapping a matrix coordinate to its register number.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -4270,6 +4276,8 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. Some architectures change register equations for different wave sizes.
 
         Returns:
             String that contains the simple formula mapping coordinates to registers
@@ -4281,13 +4289,13 @@ class InstCalc(metaclass=ABCMeta):
             raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
 
         if matrix.lower() in ('a', 'b', 'k'):
-            ret_str = self._coord_to_input_reg_eqn(matrix)
+            ret_str = self._coord_to_input_reg_eqn(matrix, wave_size)
         else: # C/D matrices
-            ret_str = self._coord_to_output_reg_eqn()
+            ret_str = self._coord_to_output_reg_eqn(wave_size)
         return ret_str
 
     @abstractmethod
-    def _coord_to_lane_eqn(self, matrix: str) -> str:
+    def _coord_to_lane_eqn(self, matrix: str, wave_size: Optional[int] = None) -> str:
         """ Returns formula for mapping a matrix coordinate to its wavefront lane.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -4300,12 +4308,15 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. Some architectures change lane equations for different wave sizes.
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
         """
 
-    def _print_element_to_register_eqn(self, block: str = "Unknown") -> None:
+    def _print_element_to_register_eqn(self, block: str = "Unknown",
+                                       wave_size: Optional[int] = None) -> None:
         """ Prints formula for matrix entry to GPR and lane mapping.
 
         Prints out the simple formulae to calculate the the mapping of a matrix element to its
@@ -4319,20 +4330,27 @@ class InstCalc(metaclass=ABCMeta):
             block: string that contains text to place in the matrix entry map for blocks
                 For instance, pass ".block" if an architecture should print an entry as
                 A[i][k].block. Pass "" to just print A[i][k].
+            wave_size: integer that contains the requested wave size to use for printing the
+                formula. Ignore this argument to avoid printing the wave size.
         """
-        print("    Matrix element to register mapping with no modifiers:")
-        print(f"        A[i][k]{block} GPR: {self.__coord_to_reg_eqn('a')}")
-        print(f"        A[i][k]{block} Lane: {self._coord_to_lane_eqn('a')}")
+        if wave_size is None:
+            print("    Matrix element to register mapping with no modifiers:")
+        else:
+            print(f"    Wave{wave_size} matrix element to register mapping with no modifiers:")
+        print(f"        A[i][k]{block} GPR: {self.__coord_to_reg_eqn('a', wave_size)}")
+        print(f"        A[i][k]{block} Lane: {self._coord_to_lane_eqn('a', wave_size)}")
         if not self.inst_info['sparse']:
             cd_str = "C or D"
         else:
             cd_str = "D"
-            print(f"        compression[i][k] GPR: {self.__coord_to_reg_eqn('k')}")
-            print(f"        compression[i][k] Lane: {self._coord_to_lane_eqn('k')}")
-        print(f"        B[k][j]{block} GPR: {self.__coord_to_reg_eqn('b')}")
-        print(f"        B[k][j]{block} Lane: {self._coord_to_lane_eqn('b')}")
-        print(f"        {cd_str}[i][j]{block} GPR: {self.__coord_to_reg_eqn('d')}")
-        print(f"        {cd_str}[i][j]{block} Lane: {self._coord_to_lane_eqn('d')}")
+            self.__print_long_element_eqn("compression[i][k] GPR",
+                                          self.__coord_to_reg_eqn('k', wave_size))
+            self.__print_long_element_eqn("compression[i][k] Lane",
+                                          self._coord_to_lane_eqn('k', wave_size))
+        print(f"        B[k][j]{block} GPR: {self.__coord_to_reg_eqn('b', wave_size)}")
+        print(f"        B[k][j]{block} Lane: {self._coord_to_lane_eqn('b', wave_size)}")
+        print(f"        {cd_str}[i][j]{block} GPR: {self.__coord_to_reg_eqn('d', wave_size)}")
+        print(f"        {cd_str}[i][j]{block} Lane: {self._coord_to_lane_eqn('d', wave_size)}")
 
     def __reg_lane_to_input_ij_coord_eqn(self) -> str:
         """ Returns equation to map register+lane to i or j index for input matrices.
@@ -4347,7 +4365,8 @@ class InstCalc(metaclass=ABCMeta):
         """
         return f"(lane % {self.inst_info['m']})"
 
-    def _reg_lane_to_i_coord_eqn(self, matrix: str) -> str:
+    def _reg_lane_to_i_coord_eqn(self, matrix: str,
+                                 wave_size: Optional[int] = None) -> str:
         """ Returns equation to map register+lane to i index.
 
         Takes instruction info and returns a string containing an equation which lets users
@@ -4359,6 +4378,8 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, c, d, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion function
+                Legal values are 32 and 64.
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
@@ -4370,6 +4391,7 @@ class InstCalc(metaclass=ABCMeta):
         if matrix.lower() not in ('a', 'c', 'd', 'k'):
             raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
 
+        del wave_size # Unused by base class
         ret_string = "Unknown" # c and d matrix must be handled by child classes
         if matrix.lower() == 'a':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
@@ -4417,7 +4439,8 @@ class InstCalc(metaclass=ABCMeta):
         return ret_string
 
     @abstractmethod
-    def _reg_lane_to_k_coord_eqn(self, matrix: str) -> str:
+    def _reg_lane_to_k_coord_eqn(self, matrix: str,
+                                 wave_size: Optional[int] = None) -> str:
         """ Returns equation to map register+lane to k index.
 
         Takes instruction info and a target matrix, and returns a string containing an
@@ -4430,6 +4453,8 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, and k (for the compression index of sparse matrics).
+            wave_size: integer that holds the wave size for the requested conversion function
+                Legal values are 32 and 64.
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
@@ -4482,7 +4507,8 @@ class InstCalc(metaclass=ABCMeta):
             else:
                 print(second_wrapper.fill(x))
 
-    def _print_register_to_element_eqn(self, print_block: bool = False) -> None:
+    def _print_register_to_element_eqn(self, print_block: bool = False,
+                                       wave_size: Optional[int] = None) -> None:
         """ Prints equation to map register+lane to matrix element.
 
         Print out simple equations for mapping a register and its lane to the element in the
@@ -4492,29 +4518,35 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             print_block: True if this equation should print information about blocks
+            wave_size: integer that holds the wave size for the requested conversion function
+                Legal values are 32, 64, or passing nothing.
         """
         inst_info = self.inst_info
         sparse_op = inst_info['sparse']
 
-        print("    Register to matrix element mapping with no modifiers:")
-        print(f"        A i: {self._reg_lane_to_i_coord_eqn('a')}")
-        if not sparse_op:
-            print(f"        A k: {self._reg_lane_to_k_coord_eqn('a')}")
+        if wave_size is None:
+            print("    Register to matrix element mapping with no modifiers:")
         else:
-            self.__print_long_element_eqn("A k", self._reg_lane_to_k_coord_eqn('a'))
+            print(f"    Wave{wave_size} register to matrix element mapping with no modifiers:")
+        print(f"        A i: {self._reg_lane_to_i_coord_eqn('a', wave_size)}")
+        if not sparse_op:
+            print(f"        A k: {self._reg_lane_to_k_coord_eqn('a', wave_size)}")
+        else:
+            self.__print_long_element_eqn("A k", self._reg_lane_to_k_coord_eqn('a', wave_size))
         if print_block:
             print(f"        A block: {self._reg_lane_to_block_eqn('a')}")
         if not inst_info['sparse']:
             cd_str = "C or D"
         else:
             cd_str = "D"
-            print(f"        compression i: {self._reg_lane_to_i_coord_eqn('k')}")
-            self.__print_long_element_eqn("compression k", self._reg_lane_to_k_coord_eqn('k'))
+            print(f"        compression i: {self._reg_lane_to_i_coord_eqn('k', wave_size)}")
+            self.__print_long_element_eqn("compression k",
+                                          self._reg_lane_to_k_coord_eqn('k', wave_size))
         print(f"        B j: {self.__reg_lane_to_j_coord_eqn('b')}")
-        print(f"        B k: {self._reg_lane_to_k_coord_eqn('b')}")
+        print(f"        B k: {self._reg_lane_to_k_coord_eqn('b', wave_size)}")
         if print_block:
             print(f"        B block: {self._reg_lane_to_block_eqn('b')}")
-        print(f"        {cd_str} i: {self._reg_lane_to_i_coord_eqn('d')}")
+        print(f"        {cd_str} i: {self._reg_lane_to_i_coord_eqn('d', wave_size)}")
         print(f"        {cd_str} j: {self.__reg_lane_to_j_coord_eqn('d')}")
         if print_block:
             print(f"        {cd_str} block: {self._reg_lane_to_block_eqn('d')}")
@@ -4599,8 +4631,8 @@ class InstCalc(metaclass=ABCMeta):
         inst_info = self.inst_info
         for size in wave_sizes:
             self.wave_width = size
-            total_in_a_gprs = self._get_instruction_num_gprs('a')
-            total_in_b_gprs = self._get_instruction_num_gprs('b')
+            total_in_a_gprs = self._get_instruction_num_gprs('a', in_lanes=size)
+            total_in_b_gprs = self._get_instruction_num_gprs('b', in_lanes=size)
             total_out_gprs = self._get_instruction_num_gprs('d')
             if len(wave_sizes) == 1:
                 print("    Register usage:")
@@ -4966,7 +4998,7 @@ class InstCalcGfx9(InstCalc):
             out_size = get_data_size(self.inst_info['out_type'])
         return super()._get_instruction_num_gprs(matrix, in_lanes, out_size)
 
-    def _coord_to_input_reg_eqn(self, matrix: str) -> str:
+    def _coord_to_input_reg_eqn(self, matrix: str, wave_size: Optional[int] = 64) -> str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -4976,6 +5008,8 @@ class InstCalcGfx9(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. In gfx9, we only support wave64, so the default of this argument is 64.
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
@@ -4986,6 +5020,7 @@ class InstCalcGfx9(InstCalc):
         if matrix.lower() not in ('a', 'b', 'k'):
             raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
 
+        del wave_size # Unused in gfx9
         inst_info = self.inst_info
         in_size = get_data_size(inst_info['in_type'])
         K = inst_info['k']
@@ -5033,16 +5068,21 @@ class InstCalcGfx9(InstCalc):
                 ret_string = '(floor(k / 8) % 2).[16*(floor(k / 4) % 2)+15 : 16*(floor(k / 4) % 2)]'
         return ret_string
 
-    def _coord_to_output_reg_eqn(self) -> str:
+    def _coord_to_output_reg_eqn(self, wave_size: Optional[int] = 64) -> str:
         """ Returns formula for mapping a matrix coordinate to its output register number.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the output register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
+        Args:
+            wave_size: integer that holds the wave size for the requested conversion
+                function. In gfx9, we only support wave64, so the default of this argument is 64.
+
         Returns:
             String that contains the simple formula mapping coordinates to output registers
         """
+        del wave_size # Unused in gfx9
         inst_info = self.inst_info
         out_type = inst_info['out_type']
         M = inst_info['m']
@@ -5070,7 +5110,7 @@ class InstCalcGfx9(InstCalc):
                 ret_string = '4 * floor(i / 8) + (i % 4)'
         return ret_string
 
-    def _coord_to_lane_eqn(self, matrix: str) -> str:
+    def _coord_to_lane_eqn(self, matrix: str, wave_size: Optional[int] = 64) -> str:
         """ Returns formula for mapping a matrix coordinate to its wavefront lane.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -5080,6 +5120,8 @@ class InstCalcGfx9(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. In gfx9, we only support wave64, so the default of this argument is 64.
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
@@ -5132,7 +5174,8 @@ class InstCalcGfx9(InstCalc):
             ret_string += 'j'
         return ret_string
 
-    def _print_element_to_register_eqn(self, block: str = ".block") -> None:
+    def _print_element_to_register_eqn(self, block: str = ".block",
+                                       wave_size: Optional[int] = None) -> None:
         """ Prints formula for matrix entry to GPR and lane mapping.
 
         Prints out the simple formulae to calculate the the mapping of a matrix element to its
@@ -5146,10 +5189,13 @@ class InstCalcGfx9(InstCalc):
             block: string that contains text to place in the matrix entry map for blocks
                 For instance, gfx9 uses blocks, so by default this function passes ".block"
                 to print an entry as A[i][k].block.
+            wave_size: integer that contains the requested wave size to use for printing the
+                formula. gfx9 only supports one wave size, so this option is passed along silently
         """
-        super()._print_element_to_register_eqn(block)
+        super()._print_element_to_register_eqn(block, wave_size)
 
-    def _reg_lane_to_i_coord_eqn(self, matrix: str) -> str:
+    def _reg_lane_to_i_coord_eqn(self, matrix: str,
+                                       wave_size: Optional[int] = None) -> str:
         """ Returns equation to map register+lane to i index.
 
         Takes instruction info and returns a string containing an equation which lets users
@@ -5158,6 +5204,8 @@ class InstCalcGfx9(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, c, d, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx9 only supports wave64.
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
@@ -5169,7 +5217,7 @@ class InstCalcGfx9(InstCalc):
         if matrix.lower() not in ('a', 'c', 'd', 'k'):
             raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
 
-        ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
+        ret_string = super()._reg_lane_to_i_coord_eqn(matrix, wave_size)
         if matrix not in ('a', 'b', 'k'):
             inst_info = self.inst_info
             M = inst_info['m']
@@ -5190,7 +5238,8 @@ class InstCalcGfx9(InstCalc):
                     ret_string += "floor(lane / 16)"
         return ret_string
 
-    def _reg_lane_to_k_coord_eqn(self, matrix: str) -> str:
+    def _reg_lane_to_k_coord_eqn(self, matrix: str,
+                                 wave_size: Optional[int] = None) -> str:
         """ Returns equation to map register+lane to k index.
 
         Takes instruction info and a target matrix, and returns a string containing an
@@ -5200,6 +5249,8 @@ class InstCalcGfx9(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, and k (for the compression index of sparse matrics).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx9 only supports wave64.
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
@@ -5408,7 +5459,8 @@ class InstCalcGfx9(InstCalc):
         """
         super()._print_execution_statistics(cu_name)
 
-    def _print_register_to_element_eqn(self, print_block: bool = True) -> None:
+    def _print_register_to_element_eqn(self, print_block: bool = True,
+                                       wave_size: Optional[int] = None) -> None:
         """ Prints equation to map register+lane to matrix element.
 
         Print out simple equations for mapping a register and its lane to the element in the
@@ -5422,6 +5474,8 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             print_block: True if this equation should print information about blocks
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx9 only supports wave64.
         """
         super()._print_register_to_element_eqn(print_block)
 
@@ -5756,9 +5810,10 @@ class InstCalcGfx11(InstCalc):
         """
         # gfx11 uses 16 lanes for its inputs, and all outputs (even 2B values) are stored
         # into 4B locations.
-        return super()._get_instruction_num_gprs(matrix, in_lanes, out_size)
+        del in_lanes
+        return super()._get_instruction_num_gprs(matrix, 16, out_size)
 
-    def _coord_to_input_reg_eqn(self, matrix: str) -> str:
+    def _coord_to_input_reg_eqn(self, matrix: str, wave_size: Optional[int] = 32) -> str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -5768,6 +5823,9 @@ class InstCalcGfx11(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a or b.
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx11 supports wave64 and wave32, but it does not matter
+                for this equation, so we default this to 32.
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
@@ -5777,6 +5835,7 @@ class InstCalcGfx11(InstCalc):
         """
         if matrix.lower() not in ('a', 'b'):
             raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        del wave_size # Unused in gfx11
         data_size = get_data_size(self.inst_info['in_type'])
         if data_size == 16:
             ret_string = 'floor(k / 2).[16*(k % 2)+15 : 16*(k % 2)]'
@@ -5786,22 +5845,29 @@ class InstCalcGfx11(InstCalc):
             ret_string = 'floor(k / 8).[4*(k % 8)+3 : 4*(k % 8)]'
         return ret_string
 
-    def _coord_to_output_reg_eqn(self) -> str:
+    def _coord_to_output_reg_eqn(self, wave_size: Optional[int] = 32) -> str:
         """ Returns formula for mapping a matrix coordinate to its output register number.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the output register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
+        Args:
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx11 supports wave64 and wave32, but it does not matter
+                for this equation, so we default this to 32.
+
         Returns:
             String that contains the simple formula mapping coordinates to output registers
         """
-        ret_string = 'floor((16 * i) / wave_width)'
+        ret_string = "Unknown"
+        if wave_size is not None:
+            ret_string = f'floor(i / {int(wave_size / 16)})'
         if get_data_size(self.inst_info['out_type']) == 16:
             ret_string = f"({ret_string}).[15:0]"
         return ret_string
 
-    def _coord_to_lane_eqn(self, matrix: str) -> str:
+    def _coord_to_lane_eqn(self, matrix: str, wave_size: Optional[int] = 32) -> str:
         """ Returns formula for mapping a matrix coordinate to its wavefront lane.
 
         Takes the instruction info and matrix, return a string with an equation that lets a user
@@ -5811,6 +5877,8 @@ class InstCalcGfx11(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, b, c, or d.
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx11 supports wave64 and wave32.
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
@@ -5821,11 +5889,17 @@ class InstCalcGfx11(InstCalc):
         if matrix.lower() not in ('a', 'b', 'c', 'd'):
             raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
         if matrix.lower() == 'a':
-            ret_this = 'i and i+16. Also i+32 and i+48 in wave64.'
+            if wave_size == 32:
+                ret_this = 'i and i+16'
+            else:
+                ret_this = 'i, i+16, i+32, and i+48'
         elif matrix.lower() == 'b':
-            ret_this = 'j and j+16. Also j+32 and j+48 in wave64.'
+            if wave_size == 32:
+                ret_this = 'j and j+16'
+            else:
+                ret_this = 'j, j+16, j+32, and j+48'
         else: # C, D
-            ret_this = '((16 * i) % wave_width) + j'
+            ret_this = f'((16 * i) % {wave_size}) + j'
         return ret_this
 
     def _reg_lane_to_block_eqn(self, matrix: str) -> str:
@@ -5844,7 +5918,8 @@ class InstCalcGfx11(InstCalc):
         del matrix # Unused in gfx11
         return ""
 
-    def _print_element_to_register_eqn(self, block: str = "") -> None:
+    def _print_element_to_register_eqn(self, block: str = "",
+                                       wave_size: Optional[int] = None) -> None:
         """ Prints formula for matrix entry to GPR and lane mapping.
 
         Prints out the simple formulae to calculate the the mapping of a matrix element to its
@@ -5857,10 +5932,18 @@ class InstCalcGfx11(InstCalc):
             block: string that contains text to place in the matrix entry map for blocks
                 For instance, gfx11 does not uses blocks, so by default this function passes an
                 empty string, to print an entry as A[i][k]
+            wave_size: integer that contains the requested wave size to use for printing the
+                formula. gfx11 supports two different wave sizes, and if this optional value is
+                not passed in, we will print both
         """
-        super()._print_element_to_register_eqn(block)
+        if wave_size is None:
+            super()._print_element_to_register_eqn(block, 32)
+            super()._print_element_to_register_eqn(block, 64)
+        else:
+            super()._print_element_to_register_eqn(block)
 
-    def _reg_lane_to_i_coord_eqn(self, matrix: str) -> str:
+    def _reg_lane_to_i_coord_eqn(self, matrix: str,
+                                       wave_size: Optional[int] = None) -> str:
         """ Returns equation to map register+lane to i index.
 
         Takes instruction info and returns a string containing an equation which lets users
@@ -5869,6 +5952,8 @@ class InstCalcGfx11(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a, c, or d.
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx11 supports wave32 and wave64.
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
@@ -5879,14 +5964,15 @@ class InstCalcGfx11(InstCalc):
         """
         if matrix.lower() not in ('a', 'c', 'd'):
             raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-        ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
-        if matrix not in ('a', 'b', 'k'):
-            ret_string = "(wave_width / 16) * GPR_num + floor(lane / 16)"
+        ret_string = super()._reg_lane_to_i_coord_eqn(matrix, wave_size)
+        if matrix not in ('a', 'b', 'k') and wave_size is not None:
+            ret_string = f"{int(wave_size / 16)} * GPR_num + floor(lane / 16)"
             if get_data_size(self.inst_info['out_type']) == 16:
                 ret_string = f"({ret_string}).[15:0]"
         return ret_string
 
-    def _reg_lane_to_k_coord_eqn(self, matrix: str) -> str:
+    def _reg_lane_to_k_coord_eqn(self, matrix: str,
+                                 wave_size: Optional[int] = None) -> str:
         """ Returns equation to map register+lane to k index.
 
         Takes instruction info and a target matrix, and returns a string containing an
@@ -5896,6 +5982,8 @@ class InstCalcGfx11(InstCalc):
         Args:
             matrix: string that contains the name of the matrix
                 Legal values are a or b.
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx11 supports wave32 and wave64.
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
@@ -5971,6 +6059,26 @@ class InstCalcGfx11(InstCalc):
                 supports both wave32 and wave64.
         """
         super()._print_register_usage(wave_sizes)
+
+    def _print_register_to_element_eqn(self, print_block: bool = False,
+                                       wave_size: Optional[int] = None) -> None:
+        """ Prints equation to map register+lane to matrix element.
+
+        Print out simple equations for mapping a register and its lane to the element in the
+        matrix and block which they hold. These can be used by developers that do not want to
+        set modifiers like CBSZ/ABID or BLGP to quickly unpack values from registers to
+        put them into output matrix locations.
+
+        Args:
+            print_block: True if this equation should print information about blocks
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx11 supports wave32 and wave64.
+        """
+        if wave_size is None:
+            super()._print_register_to_element_eqn(print_block, 32)
+            super()._print_register_to_element_eqn(print_block, 64)
+        else:
+            super()._print_register_to_element_eqn(print_block)
 
 if __name__ == '__main__':
     sys.exit(parse_and_run())
