@@ -70,7 +70,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -2463,7 +2463,7 @@ def print_arch_inst(arch: str, inst_name: str) -> None:
     print(f"Instruction: {inst_name.upper()}", flush=True)
 
 def get_data_size(data_type: str) -> int:
-    """ Returns the size of a data type, in bits
+    """ Returns the size of a data type, in bits.
 
     Args:
         data_type: string that contains the data type, from the dict_math_types dictionary keys
@@ -2474,7 +2474,7 @@ def get_data_size(data_type: str) -> int:
     return dict_math_types[data_type]['size']
 
 def get_type_desc(data_type: str) -> str:
-    """ Returns the pretty print string that describes a data type
+    """ Returns the pretty print string that describes a data type.
 
     Args:
         data_type: string that contains the data type, from the dict_math_types dictionary keys
@@ -2498,8 +2498,8 @@ def parse_and_run() -> int:
     recommendations if they are not.
 
     Returns:
-        An integer to pass back to the command-line caller of this application.
-        0 means that things passed successfully.
+        An integer to pass back to the command-line caller of this application
+        0 means that things passed successfully
         -1 means there was an internal error in the application
         -2 means there was a bad command line parameter passed to the application
     """
@@ -3077,7 +3077,7 @@ class InstCalc(metaclass=ABCMeta):
             data_size: integer holding the size of this regno's data, in bits.
             sparse: True if this register is working on a structured sparsity input register
             compression_index: True if this register holds the compression index for a
-                structured sparsity instruction.
+                structured sparsity instruction
             k_cbsz: When working on compression indices, a non-zero CBSZ value will cause
                 different register locations to be used for the compression index. As such,
                 when passing in compression_index=True, this integer field holds the
@@ -3098,7 +3098,7 @@ class InstCalc(metaclass=ABCMeta):
                 two contiguous numbers together, and so may be e.g. "1:0" to show that this
                 single regno is using both VGPR1 and VGPR0.
             '.c' is an optional extension that, when a value accesses a subset of a VGPR.
-                e.g., when accessing the bottom half of a register, it would be .[15:0]
+                e.g., when accessing the bottom half of a register, it would be .[15:0].
         """
         this_str = "v"
         if not compression_index:
@@ -3164,13 +3164,13 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             reg: string holding a register number, of the form Va.c.
-                'V' is a constant character that shows this is a vector register
+                'V' is a constant character that shows this is a vector register.
                 'a' is the actual register number. For example, if an instruction has 8 VGPRs,
                     then this value would be between 0-7. When this is a 64b register, this
                     will combine two contiguous numbers together, and so may be e.g. "1:0" to
                     show that this single regno is using both VGPR1 and VGPR0.
                 '.c' is an optional extension that, when a value accesses a subset of a VGPR.
-                    e.g, when accessing the bottom half of a register, it would be .[15:0]
+                    e.g, when accessing the bottom half of a register, it would be .[15:0].
             lane: integer holding the lane number to combine with the above reg
 
         Returns:
@@ -3232,7 +3232,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             block: an integer representing the original block of A that would be used
-                in a calculation.
+                in a calculation
             cbsz: an integer that contains the instruction's CBSZ value
             abid: an integer that contains the instruction's ABID value
 
@@ -3264,7 +3264,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             lane: an integer representing the original lane of B that would be used
-                in a calculation.
+                in a calculation
             blgp: an integer that contains the instruction's BLGP value
 
         Returns:
@@ -3330,8 +3330,8 @@ class InstCalc(metaclass=ABCMeta):
             Based on the matrix and requested coordinates, return three things in a tuple:
             1. String requested element name, in the format A[i][k], B[k][j], or C[i][j]
             2. String register name that holds the element, in the format V#.[bits]
-            3. List of integers, containing the lane numbers within that register that
-                hold the element.
+            3. List of integers containing the lane numbers within that register that
+                hold the element
             Tuple: (matrix entry, register holding that entry, lanes within that register)
         """
 
@@ -3354,7 +3354,7 @@ class InstCalc(metaclass=ABCMeta):
             b_lanes: list of integers containing all the lanes of B to query
 
         Returns:
-            Integer from the available lanes of B that match the requested lane of A.
+            Integer from the available lanes of B that match the requested lane of A
         """
 
     @staticmethod
@@ -3365,14 +3365,14 @@ class InstCalc(metaclass=ABCMeta):
         absolute values, depending on the input matrix and the 'negate' structure.
 
         Args:
-            reg: string that lists the register that holds this matrix entry.
-                String should contain [15:0] or [31:16] if the entry is in the lower
+            reg: string that lists the register that holds this matrix entry
+                This string should contain [15:0] or [31:16] if the entry is in the lower
                 or upper halves, respectively.
             mat_val: string that contains the matrix entry value, which this function
-                may add "-" to negate, and "|mat_val|" to indicate absolute value.
+                may add "-" to negate, and "|mat_val|" to indicate absolute value
             matrix: string name of the matrix this entry comes from
             negate: dictionary of matrix names to bools that indicate whether to
-                negate and absolute-val entries from this matrix.
+                negate and absolute-val entries from this matrix
 
         Returns:
             String that may just be mat_val (if no negation or abs-val), -mat_val
@@ -3405,7 +3405,7 @@ class InstCalc(metaclass=ABCMeta):
                 False causes the string to contain the VGPRs and lanes that make up the
                 A[], B[], and C[] matrices that go into the calculation.
             negate: dictionary of matrix names to bools that indicate whether to
-                negate and absolute-val entries from this matrix.
+                negate and absolute-val entries from this matrix
             cbsz: integer containing this instruction's CBSZ modifier
             abid: integer containing this instruction's ABID modifier
             blgp: integer containing this instruction's BLGP modifier
@@ -3413,7 +3413,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Returns:
             A string containing a mathematical formula of the matrix entries or register-lanes
-            that went into calculating the requested D matrix entry.
+            that went into calculating the requested D matrix entry
         """
         inst_info = self.inst_info
         # Matrix being sent in will look like D[i][j].Bb, where the ".Bb" is optional.
@@ -3497,14 +3497,14 @@ class InstCalc(metaclass=ABCMeta):
                     [31:24]: the most significant 8b of a 32b register
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
             out_calc: True if, when printing the register location for the D
                 output matrix entry, you desire to also print the register
                 locations of the A, B, and C matrices that went into the
-                calculation of the output.
+                calculation of the output
             negate: dictionary of matrix names to bools that indicate whether to
-                negate and absolute-val entries from this matrix.
+                negate and absolute-val entries from this matrix
             i: integer coordinate for the query of the matrix row for A, C, D, & K matrices
             j: integer coordinate for the query of the matrix column for the B, C, & D matrices
             k: integer coordinate for the query of the A & K column or B row
@@ -3574,15 +3574,15 @@ class InstCalc(metaclass=ABCMeta):
         So V0{17}.[23:16] -> A[i][k] for whichever values of i and k.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
             blgp: integer value of the instruction's BLGP modifier
             opsel: integer value of the instruction's OPSEL modifier
 
         Returns:
-            Dictionary of register-lane string keys that map to lists of matrix entry strings.
+            Dictionary of register-lane string keys that map to lists of matrix entry strings
             If the VGPR is used for multiple matrix entries (e.g., due to modifiers pushing the
             VGPR's data to multiple matrix inputs), the list of strings may be >1 entry.
         """
@@ -3622,7 +3622,7 @@ class InstCalc(metaclass=ABCMeta):
     # this to be a method and have access to self variables.
     #pylint: disable=no-self-use
     def _calculate_initial_regno_offset(self, matrix: str, opsel: int) -> int:
-        """ Calculates an offset into a register slot based on OPSEL
+        """ Calculates an offset into a register slot based on OPSEL.
 
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
@@ -3638,8 +3638,8 @@ class InstCalc(metaclass=ABCMeta):
         function.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
             opsel: integer value of the instruction's OPSEL modifier
 
         Returns:
@@ -3668,8 +3668,8 @@ class InstCalc(metaclass=ABCMeta):
         function.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
             gpr_ratio: the number of regnos in each GPR
 
         Returns:
@@ -3697,13 +3697,13 @@ class InstCalc(metaclass=ABCMeta):
         of whether the requested register was Vn+1 or Vn.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
             out_calc: True if, when printing the matrix entry for the D output
                 location, you desire to also print the matrix entries of the A, B,
-                and C matrices that went into the calculation of the output.
+                and C matrices that went into the calculation of the output
             negate: dictionary of matrix names to bools that indicate whether to
-                negate and absolute-val entries from this matrix.
+                negate and absolute-val entries from this matrix
             reg: integer value of the register number to request
             lane: integer value of the lane to request
             cbsz: integer value of the instruction's CBSZ modifier
@@ -3833,13 +3833,13 @@ class InstCalc(metaclass=ABCMeta):
         This function calculates this scaling value based on the matrix and type of instruction.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
 
         Returns:
             Floating point scaling calculation, e.g. a value of 0.5 indicates that there are
             two entries in each "regno" slot, so only move the regno value by 1 only after
-            printing twice.
+            printing twice
         """
         if ((self.inst_info['sparse'] and matrix.lower() == 'a') or matrix.lower() == 'k'):
             ret_this = 0.5
@@ -3861,7 +3861,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             output_type: string that indicates the type of output, from the list of
-                csv, markdown, asciidoc, or grid.
+                csv, markdown, asciidoc, or grid
         """
         if str(output_type.lower().strip()) == str("csv"):
             join_char = ";"
@@ -3881,7 +3881,7 @@ class InstCalc(metaclass=ABCMeta):
         Args:
             table_to_print: List of list of strings, which makes up a 2D table to print
             output_type: string that indicates the type of output, from the list of
-                csv, markdown, asciidoc, or grid.
+                csv, markdown, asciidoc, or grid
 
         Returns:
             String returned from tabulate, ready to print
@@ -3923,10 +3923,10 @@ class InstCalc(metaclass=ABCMeta):
                     [31:24]: the most significant 8b of a 32b register
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
             requested_output: string that indicates the type of output, from the list of
-                csv, markdown, asciidoc, or grid.
+                csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
                 negate and absolute-val entries from this matrix.
             cbsz: integer value of the instruction's CBSZ modifier
@@ -3935,7 +3935,7 @@ class InstCalc(metaclass=ABCMeta):
             opsel: integer value of the instruction's OPSEL modifier
             transpose: boolean set to true to cause the matrix to be printed transposed
             print_blocks: boolean set to true if this architecture and instruction
-                should print the word "Block #" above each block of the matrix.
+                should print the word "Block #" above each block of the matrix
         """
         inst_info = self.inst_info
         M = inst_info['m']
@@ -4046,19 +4046,19 @@ class InstCalc(metaclass=ABCMeta):
         show rows as columns and vice versa.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
             requested_output: string that indicates the type of output, from the list of
-                csv, markdown, asciidoc, or grid.
+                csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
-                negate and absolute-val entries from this matrix.
+                negate and absolute-val entries from this matrix
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
             blgp: integer value of the instruction's BLGP modifier
             opsel: integer value of the instruction's OPSEL modifier
             transpose: boolean set to true to cause the matrix to be printed transposed
             contig_values: an integer that defines the number of contiguous values of a
-                register that are used to hold unique values of a matrix.
+                register that are used to hold unique values of a matrix
         """
         inst_info = self.inst_info
         M = inst_info['m']
@@ -4149,12 +4149,12 @@ class InstCalc(metaclass=ABCMeta):
         """ Calculates the number of GPRs needed to hold a matrix.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
             in_lanes: an integer that defines the number of contiguous lanes that are used to hold
                 values of a matrix. If this is not passed in, the argument is matched to the
                 wavefront size of the target architecture.
-            out_size: The number of bits used to hold output values for this instruction.
+            out_size: The number of bits used to hold output values for this instruction
                 For instance: some devices may store 16b values into either the low or high
                 half of a 32b output register. These architectures would need out_type=32.
                 If this is not passed in, the argument is matched to the actual instruction's
@@ -4189,7 +4189,7 @@ class InstCalc(metaclass=ABCMeta):
     def _coord_to_input_reg_eqn(self, matrix: str) ->str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the input register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
@@ -4197,8 +4197,8 @@ class InstCalc(metaclass=ABCMeta):
         Should be filled in by the architecture child classes.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, or k (for the compression index of sparse matrices).
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
@@ -4208,7 +4208,7 @@ class InstCalc(metaclass=ABCMeta):
     def _coord_to_output_reg_eqn(self) -> str:
         """ Returns formula for mapping a matrix coordinate to its output register number.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the output register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
@@ -4222,13 +4222,13 @@ class InstCalc(metaclass=ABCMeta):
     def __coord_to_reg_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its register number.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the register that holds a particular entry in the matrix from its i/j/k/block
         coordinates.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
 
         Returns:
             String that contains the simple formula mapping coordinates to registers
@@ -4247,7 +4247,7 @@ class InstCalc(metaclass=ABCMeta):
     def _coord_to_lane_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its wavefront lane.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the lane that holds a particular entry in the matrix from its i/j/k/block
         coordinates.
 
@@ -4255,8 +4255,8 @@ class InstCalc(metaclass=ABCMeta):
         Should be filled in by the architecture child classes.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
@@ -4265,15 +4265,15 @@ class InstCalc(metaclass=ABCMeta):
     def _print_element_to_register_eqn(self, block: str = "Unknown") -> None:
         """ Prints formula for matrix entry to GPR and lane mapping.
 
-        Print out the simple formulae to calculate the the mapping of a matrix element to its
+        Prints out the simple formulae to calculate the the mapping of a matrix element to its
         register and lane.
 
         Will always print A[], B[], and D[]. If the instruction allows C[] matrices, then it will
-        print D[] as "C or D[i][j]". For sparse instructions, may also print the compression
+        print D[] as "C or D[i][j]". For sparse instructions, will also print the compression
         matrix.
 
         Args:
-            block: string that contains text to place in the matrix entry map for blocks.
+            block: string that contains text to place in the matrix entry map for blocks
                 For instance, pass ".block" if an architecture should print an entry as
                 A[i][k].block. Pass "" to just print A[i][k].
         """
@@ -4298,13 +4298,9 @@ class InstCalc(metaclass=ABCMeta):
         calculate the A matrix's i coordinate or the B matrix's j coordinate based on the
         register and lane.
 
-        Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a and b
-
         Returns:
             A string which contains the equation to calculate the i or j coordinate for
-            an input matrix held by a particular register and lane combination.
+            an input matrix held by a particular register and lane combination
         """
         return f"(lane % {self.inst_info['m']})"
 
@@ -4318,12 +4314,12 @@ class InstCalc(metaclass=ABCMeta):
         child classes overloading this function.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, c, d, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, c, d, or k (for the compression index of sparse matrices).
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
-            an input matrix held by a particular register and lane combination.
+            an input matrix held by a particular register and lane combination
         """
         ret_string = "Unknown" # c and d matrix must be handled by child classes
         if matrix.lower() == 'a':
@@ -4339,13 +4335,9 @@ class InstCalc(metaclass=ABCMeta):
         equation which lets users calculate the j coordinate based on the register and lane.
         Targets a particular instruction, and does not handle modifiers.
 
-        Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                c and d
-
         Returns:
             A string which contains the equation to calculate the j coordinate held by a
-            particular output register and lane combination.
+            particular output register and lane combination
         """
         return f"(lane % {self.inst_info['m']})"
 
@@ -4357,12 +4349,12 @@ class InstCalc(metaclass=ABCMeta):
         Targets a particular instruction, and does not handle modifiers.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                b, c, and d
+            matrix: string that contains the name of the matrix
+                Legal values are b, c, and d.
 
         Returns:
             A string which contains the equation to calculate the j coordinate held by a
-            particular register and lane combination.
+            particular register and lane combination
         """
         if matrix.lower() == 'b':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
@@ -4382,12 +4374,12 @@ class InstCalc(metaclass=ABCMeta):
         method and must be filled in by child classes.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, and k (for the compression index of sparse matrics).
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
-            particular register and lane combination.
+            particular register and lane combination
         """
 
     @abstractmethod
@@ -4402,12 +4394,12 @@ class InstCalc(metaclass=ABCMeta):
         method and must be filled in by child classes.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
-            register and lane combination.
+            register and lane combination
         """
 
     @staticmethod
@@ -4445,7 +4437,7 @@ class InstCalc(metaclass=ABCMeta):
         put them into output matrix locations.
 
         Args:
-            print_block: True if this equation should print information about blocks.
+            print_block: True if this equation should print information about blocks
         """
         inst_info = self.inst_info
         sparse_op = inst_info['sparse']
@@ -4478,7 +4470,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             encoding_name: String containing the name of the encoding format for the
-                current architecture.
+                current architecture
                 Defaults to "Unknown", and should either be filled in by child class
                 specializations of this function or directly by callers.
         """
@@ -4505,7 +4497,7 @@ class InstCalc(metaclass=ABCMeta):
         The instruction and architecture are part of the class.
 
         Args:
-            cu_name: string that contains the name of the compute unit on the target arch.
+            cu_name: string that contains the name of the compute unit on the target arch
                 Different architectures may use e.g., CU, or WGP, or some other name.
                 Defaults to "Unknown", and should either be filled in by child class
                 specializations of this function or directly by callers.
@@ -4543,10 +4535,10 @@ class InstCalc(metaclass=ABCMeta):
         instruction on a target architecture. Some architectures support more than one
         wavefront size. In that case, print out the register usage for each wavefront size.
         This is needed because different wavefront sizes can cause different GPR usage for
-        the same matris size.
+        the same matrix size.
 
         Args:
-            wave_sizes: a tuple of wavefront sizes to use to print this info.
+            wave_sizes: a tuple of wavefront sizes to use to print this info
                 Defaults to an empty tuple, and should either be filled in by child class
                 specializations of this function or directly by callers.
         """
@@ -4594,7 +4586,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             encoding_name: String containing the name of the encoding format for the
-                current architecture.
+                current architecture
                 Defaults to "Unknown", and should either be filled in by child class
                 specializations of this function or directly by callers.
         """
@@ -4646,7 +4638,7 @@ class InstCalcGfx9(InstCalc):
         matching. It takes as an argument a list of lanes from B, and the requested
         lane of A. Returned the lane of B that is multiplied by the reuqested ane of A.
 
-        On gfx9, B matrix only has a single lane per entry, like A matrix.
+        In gfx9, B matrix only has a single lane per entry, like A matrix.
         As such, just return the first lane of B.
 
         Args:
@@ -4654,7 +4646,7 @@ class InstCalcGfx9(InstCalc):
             b_lanes: list of integers containing all the lanes of B to query
 
         Returns:
-            Integer from the available lanes of B that match the requested lane of A.
+            Integer from the available lanes of B that match the requested lane of A
         """
         del a_lane # Unused in gfx9
         return b_lanes[0]
@@ -4669,9 +4661,9 @@ class InstCalcGfx9(InstCalc):
         described in the comments within the function.
 
         Args:
-            M: integer "outer" dimension of the input matrix, in matrix entries.
+            M: integer "outer" dimension of the input matrix, in matrix entries
                 For A and K matrices, this is the height. For B matrices, this is the width
-            K: integer "inner" dimension of the input matrix, in matrix entries.
+            K: integer "inner" dimension of the input matrix, in matrix entries
                 For A and K matrices, this is the width. For B matrices, this is the height
             B: integer number of blocks in the input matrix
             i: integer location within the input matrix's "outer" dimension
@@ -4684,7 +4676,7 @@ class InstCalcGfx9(InstCalc):
             data_size: integer size of the input data, in bits
             sparse: True if this register is working on a structured sparsity input register
             compression_index: True if this register holds the compression index for a
-                structured sparsity instruction.
+                structured sparsity instruction
             k_cbsz: When working on compression indices, a non-zero CBSZ value will cause
                 different register locations to be used for the compression index. As such,
                 when passing in compression_index=True, this integer field holds the
@@ -4700,7 +4692,7 @@ class InstCalcGfx9(InstCalc):
             Based on the matrix and requested coordinates, return two things in a tuple:
             1. String register name that holds the element, in the format V#.[bits]
             2. List of integers, containing the lane numbers within that register that
-                hold the element.
+                hold the element
             Tuple: (register holding the matrix entry, lanes within that register)
         """
         # Start by calculating how many elements of the matrix there are in the
@@ -4764,7 +4756,7 @@ class InstCalcGfx9(InstCalc):
             Based on the matrix and requested coordinates, return two things in a tuple:
             1. String register name that holds the element, in the format V#.[bits]
             2. List of integers, containing the lane numbers within that register that
-                hold the element.
+                hold the element
             Tuple: (register holding the matrix entry, lanes within that register)
         """
         # The 64b output layout and 32b output layout are different.
@@ -4835,7 +4827,7 @@ class InstCalcGfx9(InstCalc):
             1. String requested element name, in the format A[i][k], B[k][j], or C[i][j]
             2. String register name that holds the element, in the format V#.[bits]
             3. List of integers, containing the lane numbers within that register that
-                hold the element.
+                hold the element
             Tuple: (matrix entry, register holding that entry, lanes within that register)
         """
         del opsel # Unused in gfx9
@@ -4895,12 +4887,12 @@ class InstCalcGfx9(InstCalc):
         """ Calculates the number of GPRs needed to hold a matrix.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
             in_lanes: an integer that defines the number of contiguous lanes that are used to hold
-                values of a matrix. On gfx9, this is always 64, so the default of this
-                argument is 64.
-            out_size: The number of bits used to hold output values for this instruction.
+                values of a matrix
+                In gfx9, this is always 64, so the default of this argument is 64.
+            out_size: The number of bits used to hold output values for this instruction
                 For instance: some devices may store 16b values into either the low or high
                 half of a 32b output register. Some gfx9 architectures allow 64b outputs (e.g,
                 for F64 calculations). If this argument is not passed in, the function
@@ -4909,7 +4901,7 @@ class InstCalcGfx9(InstCalc):
         Returns:
             An integer that defines the number of GPRs needed to hold the requested matrix
         """
-        # On gfx9, we always use all 64 lanes for input calculations, but output sizes
+        # In gfx9, we always use all 64 lanes for input calculations, but output sizes
         # can change for 64b outputs
         if out_size is None:
             out_size = get_data_size(self.inst_info['out_type'])
@@ -4918,13 +4910,13 @@ class InstCalcGfx9(InstCalc):
     def _coord_to_input_reg_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the input register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, or k (for the compression index of sparse matrices).
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
@@ -4975,7 +4967,7 @@ class InstCalcGfx9(InstCalc):
     def _coord_to_output_reg_eqn(self) -> str:
         """ Returns formula for mapping a matrix coordinate to its output register number.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the output register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
@@ -5012,13 +5004,13 @@ class InstCalcGfx9(InstCalc):
     def _coord_to_lane_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its wavefront lane.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the lane that holds a particular entry in the matrix from its i/j/k/block
         coordinates.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k (for the compression index of sparse matrices).
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
@@ -5068,15 +5060,15 @@ class InstCalcGfx9(InstCalc):
     def _print_element_to_register_eqn(self, block: str = ".block") -> None:
         """ Prints formula for matrix entry to GPR and lane mapping.
 
-        Print out the simple formulae to calculate the the mapping of a matrix element to its
+        Prints out the simple formulae to calculate the the mapping of a matrix element to its
         register and lane.
 
         Will always print A[], B[], and D[]. If the instruction allows C[] matrices, then it will
-        print D[] as "C or D[i][j]". For sparse instructions, may also print the compression
+        print D[] as "C or D[i][j]". For sparse instructions, will also print the compression
         matrix.
 
         Args:
-            block: string that contains text to place in the matrix entry map for blocks.
+            block: string that contains text to place in the matrix entry map for blocks
                 For instance, gfx9 uses blocks, so by default this function passes ".block"
                 to print an entry as A[i][k].block.
         """
@@ -5089,12 +5081,12 @@ class InstCalcGfx9(InstCalc):
         calculate the i coordinate for the A, C, D, or compression index matrices.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, c, d, or k (for the compression index of sparse matrices)
+            matrix: string that contains the name of the matrix
+                Legal values are a, c, d, or k (for the compression index of sparse matrices).
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
-            an input matrix held by a particular register and lane combination.
+            an input matrix held by a particular register and lane combination
         """
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
         if matrix not in ('a', 'b', 'k'):
@@ -5125,12 +5117,12 @@ class InstCalcGfx9(InstCalc):
         Targets a particular instruction, and does not handle modifiers.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, and k (for the compression index of sparse matrics).
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
-            particular register and lane combination.
+            particular register and lane combination
         """
         inst_info = self.inst_info
         in_gprs = self._get_instruction_num_gprs(matrix)
@@ -5182,7 +5174,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             encoding_name: String containing the name of the encoding format for the
-                current architecture. Defaults to "VOP3P-MAI" on gfx9.
+                current architecture; defaults to "VOP3P-MAI" in gfx9.
         """
         super()._print_opcode(encoding_name)
         print(f"    {encoding_name} Opcode: {self.inst_info['opcode'] & 0x3f:#02x}")
@@ -5203,11 +5195,11 @@ class InstCalcGfx9(InstCalc):
         instruction on a target architecture. Some architectures support more than one
         wavefront size. In that case, print out the register usage for each wavefront size.
         This is needed because different wavefront sizes can cause different GPR usage for
-        the same matris size.
+        the same matrix size.
 
         Args:
-            wave_sizes: a tuple of wavefront sizes to use to print this info.
-                Defaults to a single truple entry of integer 64 on gfx9, because gfx9
+            wave_sizes: a tuple of wavefront sizes to use to print this info
+                Defaults to a single tuple entry of integer 64 in gfx9, because gfx9
                 only supports wave64.
         """
         super()._print_register_usage(wave_sizes)
@@ -5222,7 +5214,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             encoding_name: String containing the name of the encoding format for the
-                current architecture. gfx9 defaults to "VOP3P-MAI".
+                current architecture; gfx9 defaults to "VOP3P-MAI".
         """
         super()._print_register_info(encoding_name)
         print("    Register capabilities:")
@@ -5250,11 +5242,12 @@ class InstCalcGfx9(InstCalc):
         and does not handle modifiers.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are a, b, or k
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, or k.
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
-            register and lane combination.
+            register and lane combination
         """
         inst_info = self.inst_info
         ret_string = ""
@@ -5274,11 +5267,12 @@ class InstCalcGfx9(InstCalc):
         and does not handle modifiers.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are c or d
+            matrix: string that contains the name of the matrix
+                Legal values are c or d.
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
-            register and lane combination.
+            register and lane combination
         """
         inst_info = self.inst_info
         ret_string = ""
@@ -5303,12 +5297,12 @@ class InstCalcGfx9(InstCalc):
         and does not handle modifiers.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, d, and k (for the compression index of sparse matrics)
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
-            register and lane combination.
+            register and lane combination
         """
         if matrix.lower() in ('a', 'b'):
             ret_string = self.__reg_lane_to_input_block_eqn()
@@ -5324,9 +5318,9 @@ class InstCalcGfx9(InstCalc):
         The instruction and architecture are part of the class.
 
         Args:
-            cu_name: string that contains the name of the compute unit on the target arch.
+            cu_name: string that contains the name of the compute unit on the target arch
                 Different architectures may use e.g., CU, or WGP, or some other name.
-                Defaults to "CU" on gfx9.
+                Defaults to "CU" in gfx9.
         """
         super()._print_execution_statistics(cu_name)
 
@@ -5338,18 +5332,18 @@ class InstCalcGfx9(InstCalc):
         set modifiers like CBSZ/ABID or BLGP to quickly unpack values from registers to
         put them into output matrix locations.
 
-        On gfx9, we print should print block information because gfx9 supports matrix blocks.
+        In gfx9, we print should print block information because gfx9 supports matrix blocks.
         This child specialization of the function is meant specifically to set a default
         value of print_block=True.
 
         Args:
-            print_block: True if this equation should print information about blocks.
+            print_block: True if this equation should print information about blocks
         """
         super()._print_register_to_element_eqn(print_block)
 
 
 class InstCalcGfx11(InstCalc):
-    """ Calculator for matrix multiplication instruction details on gfx11 architecture.
+    """ Calculator for matrix multiplication instruction details in gfx11 architecture.
 
     This is a child class of the InstCalc class, because gfx11/RDNA3 requires different
     calculations that other architectures.
@@ -5378,8 +5372,8 @@ class InstCalcGfx11(InstCalc):
             b_lanes: list of integers containing all the lanes of B to query
 
         Returns:
-            Integer from the available lanes of B that match the requested lane of A.
-            On gfx11, the A and B matrix entries are lane-matched. As such, this
+            Integer from the available lanes of B that match the requested lane of A
+            In gfx11, the A and B matrix entries are lane-matched. As such, this
             returns the same lane as A.
         """
         del b_lanes # Unused in gfx11
@@ -5404,7 +5398,7 @@ class InstCalcGfx11(InstCalc):
             Based on the matrix and requested coordinates, return two things in a tuple:
             1. String register name that holds the element, in the format V#.[bits]
             2. List of integers, containing the lane numbers within that register that
-                hold the element.
+                hold the element
             Tuple: (register holding the matrix entry, lanes within that register)
         """
         reg = self._get_reg_name(data_size, False, False, 0, 0, k)
@@ -5441,7 +5435,7 @@ class InstCalcGfx11(InstCalc):
             Based on the matrix and requested coordinates, return two things in a tuple:
             1. String register name that holds the element, in the format V#.[bits]
             2. List of integers, containing the lane numbers within that register that
-                hold the element.
+                hold the element
             Tuple: (register holding the matrix entry, lanes within that register)
         """
         # When the output is 16b, we only write into the lower or upper half of
@@ -5486,7 +5480,7 @@ class InstCalcGfx11(InstCalc):
             1. String requested element name, in the format A[i][k], B[k][j], or C[i][j]
             2. String register name that holds the element, in the format V#.[bits]
             3. List of integers, containing the lane numbers within that register that
-                hold the element.
+                hold the element
             Tuple: (matrix entry, register holding that entry, lanes within that register)
         """
         del block, cbsz, abid, blgp # Unused in gfx11
@@ -5509,7 +5503,7 @@ class InstCalcGfx11(InstCalc):
         return (element_name, reg, lanes)
 
     def _calculate_initial_regno_offset(self, matrix: str, opsel: int) -> int:
-        """ Calculates an offset into a register slot based on OPSEL
+        """ Calculates an offset into a register slot based on OPSEL.
 
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
@@ -5520,15 +5514,16 @@ class InstCalcGfx11(InstCalc):
         This function returns an offset, so that these slots (which we call regnos) can
         be skipped.
 
-        On gfx11, 16b outputs only use the top or bottom half of the registers, not both at
+        In gfx11, 16b outputs only use the top or bottom half of the registers, not both at
         the same time. Opsel=0 selects to store into the bottom half, Opsel=4 selects to store
-        into the upper half. As such, when we are on gfx11, looking at the C/D matrix,
+        into the upper half. As such, when we are in gfx11, looking at the C/D matrix,
         and the output is 4, we only actually print half as many output registers. And
         further, when opsel == 4, we bump forward one regno to hit the top half of
         the register.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are a, b, c, and d
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, and d.
             opsel: integer value of the instruction's OPSEL modifier
 
         Returns:
@@ -5553,14 +5548,15 @@ class InstCalcGfx11(InstCalc):
         This function returns the number of slots to print in each register; the rest can
         be skipped.
 
-        On gfx11, 16b outputs only use the top or bottom half of the registers, not both at
-        the same time. As such, when we are on gfx11, looking at the C/D matrix,
+        In gfx11, 16b outputs only use the top or bottom half of the registers, not both at
+        the same time. As such, when we are in gfx11, looking at the C/D matrix,
         and the output is 4, we only actually print half as many output registers.
         Leave "gpr_ratio" the same, however, so that we skip over both halves when we
         are iterating over things.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are a, b, c, and d
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, and d.
             gpr_ratio: the number of regnos in each GPR
 
         Returns:
@@ -5595,10 +5591,10 @@ class InstCalcGfx11(InstCalc):
                     [31:24]: the most significant 8b of a 32b register
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, or d.
             requested_output: string that indicates the type of output, from the list of
-                csv, markdown, asciidoc, or grid.
+                csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
                 negate and absolute-val entries from this matrix.
             cbsz: integer value of the instruction's CBSZ modifier
@@ -5607,7 +5603,7 @@ class InstCalcGfx11(InstCalc):
             opsel: integer value of the instruction's OPSEL modifier
             transpose: boolean set to true to cause the matrix to be printed transposed
             print_blocks: boolean set to true if this architecture and instruction
-                should print the word "Block #" above each block of the matrix.
+                should print the word "Block #" above each block of the matrix
                 gfx11 does not do this by default.
         """
         super().calculate_register_layout(matrix, requested_output, negate, cbsz, abid, blgp,
@@ -5628,10 +5624,10 @@ class InstCalcGfx11(InstCalc):
         show rows as columns and vice versa.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a, b, c, or d
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, or d.
             requested_output: string that indicates the type of output, from the list of
-                csv, markdown, asciidoc, or grid.
+                csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
                 negate and absolute-val entries from this matrix.
             cbsz: integer value of the instruction's CBSZ modifier
@@ -5640,7 +5636,7 @@ class InstCalcGfx11(InstCalc):
             opsel: integer value of the instruction's OPSEL modifier
             transpose: boolean set to true to cause the matrix to be printed transposed
             contig_values: an integer that defines the number of contiguous values of a
-                register that are used to hold unique values of a matrix.
+                register that are used to hold unique values of a matrix
                 gfx11 uses 16 lanes by default.
         """
         super().calculate_matrix_layout(matrix, requested_output, negate, cbsz, abid, blgp, opsel,
@@ -5651,11 +5647,12 @@ class InstCalcGfx11(InstCalc):
         """ Calculates the number of GPRs needed to hold a matrix.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are a, b, c, or d
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, or d.
             in_lanes: an integer that defines the number of contiguous lanes that are used to hold
-                values of a matrix. On gfx11, this is always 16, so the default of this
+                values of a matrix; in gfx11, this is always 16, so the default of this
                 argument is 16.
-            out_size: The number of bits used to hold output values for this instruction.
+            out_size: The number of bits used to hold output values for this instruction
                 For instance: some devices may store 16b values into either the low or high
                 half of a 32b output register. If this argument is not passed in, the function
                 will initialize the value to 32.
@@ -5670,13 +5667,13 @@ class InstCalcGfx11(InstCalc):
     def _coord_to_input_reg_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the input register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a or b
+            matrix: string that contains the name of the matrix
+                Legal values are a or b.
 
         Returns:
             String that contains the simple formula mapping coordinates to input registers
@@ -5694,7 +5691,7 @@ class InstCalcGfx11(InstCalc):
     def _coord_to_output_reg_eqn(self) -> str:
         """ Returns formula for mapping a matrix coordinate to its output register number.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the output register that holds a particular entry in the matrix from its
         i/j/k/block coordinates.
 
@@ -5709,12 +5706,13 @@ class InstCalcGfx11(InstCalc):
     def _coord_to_lane_eqn(self, matrix: str) -> str:
         """ Returns formula for mapping a matrix coordinate to its wavefront lane.
 
-        Take the instruction info and matrix, return a string with an equation that lets a user
+        Takes the instruction info and matrix, return a string with an equation that lets a user
         calculate the lane that holds a particular entry in the matrix from its i/j/k/block
         coordinates.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are a, b, c, or d
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, or d.
 
         Returns:
             String that contains the simple formula mapping coordinates to lanes
@@ -5735,10 +5733,10 @@ class InstCalcGfx11(InstCalc):
         and does not handle modifiers.
 
         Args:
-            matrix: string that contains the name of the matrix.
+            matrix: string that contains the name of the matrix
 
         Returns:
-            A blank string, because there are no blocks on gfx11
+            A blank string, because there are no blocks in gfx11
         """
         del matrix # Unused in gfx11
         return ""
@@ -5746,14 +5744,14 @@ class InstCalcGfx11(InstCalc):
     def _print_element_to_register_eqn(self, block: str = "") -> None:
         """ Prints formula for matrix entry to GPR and lane mapping.
 
-        Print out the simple formulae to calculate the the mapping of a matrix element to its
+        Prints out the simple formulae to calculate the the mapping of a matrix element to its
         register and lane.
 
         Will always print A[], B[], and D[]. If the instruction allows C[] matrices, then it will
         print D[] as "C or D[i][j]".
 
         Args:
-            block: string that contains text to place in the matrix entry map for blocks.
+            block: string that contains text to place in the matrix entry map for blocks
                 For instance, gfx11 does not uses blocks, so by default this function passes an
                 empty string, to print an entry as A[i][k]
         """
@@ -5766,11 +5764,12 @@ class InstCalcGfx11(InstCalc):
         calculate the i coordinate for the A, C, or D matrices.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are a, c, or d
+            matrix: string that contains the name of the matrix
+                Legal values are a, c, or d.
 
         Returns:
             A string which contains the equation to calculate the i coordinate for
-            an input matrix held by a particular register and lane combination.
+            an input matrix held by a particular register and lane combination
         """
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix)
         if matrix not in ('a', 'b', 'k'):
@@ -5787,12 +5786,12 @@ class InstCalcGfx11(InstCalc):
         Targets a particular instruction, and does not handle modifiers.
 
         Args:
-            matrix: string that contains the name of the matrix. Legal values are
-                a or b
+            matrix: string that contains the name of the matrix
+                Legal values are a or b.
 
         Returns:
             A string which contains the equation to calculate the k coordinate held by a
-            particular register and lane combination.
+            particular register and lane combination
         """
         del matrix # Unused in gfx11, both input matrices have the same layout
         data_size = get_data_size(self.inst_info['in_type'])
@@ -5809,7 +5808,7 @@ class InstCalcGfx11(InstCalc):
 
         Args:
             encoding_name: String containing the name of the encoding format for the
-                current architecture. Defaults to "VOP3P" on gfx11.
+                current architecture; defaults to "VOP3P" in gfx11.
         """
         super()._print_opcode(encoding_name)
 
@@ -5823,7 +5822,7 @@ class InstCalcGfx11(InstCalc):
 
         Args:
             encoding_name: String containing the name of the encoding format for the
-                current architecture. gfx11 defaults to "VOP3P".
+                current architecture; gfx11 defaults to "VOP3P".
         """
         super()._print_register_info(encoding_name)
         print("    Register modifiers:")
@@ -5839,9 +5838,9 @@ class InstCalcGfx11(InstCalc):
         The instruction and architecture are part of the class.
 
         Args:
-            cu_name: string that contains the name of the compute unit on the target arch.
+            cu_name: string that contains the name of the compute unit on the target arch
                 Different architectures may use e.g., CU, or WGP, or some other name.
-                Defaults to "WGP" on gfx11.
+                Defaults to "WGP" in gfx11.
         """
         super()._print_execution_statistics(cu_name)
 
@@ -5852,11 +5851,11 @@ class InstCalcGfx11(InstCalc):
         instruction on a target architecture. Some architectures support more than one
         wavefront size. In that case, print out the register usage for each wavefront size.
         This is needed because different wavefront sizes can cause different GPR usage for
-        the same matris size.
+        the same matrix size.
 
         Args:
-            wave_sizes: a tuple of wavefront sizes to use to print this info.
-                Defaults to a truple of integers 32 and 64 on gfx11, because gfx11
+            wave_sizes: a tuple of wavefront sizes to use to print this info
+                Defaults to a tuple of integers 32 and 64 in gfx11, because gfx11
                 supports both wave32 and wave64.
         """
         super()._print_register_usage(wave_sizes)
