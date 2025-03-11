@@ -71,7 +71,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -1305,7 +1305,7 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'integer': False,
             'c_d_arch': True,
             'gpr_byte_align': 8,
-            'blgp': True,
+            'blgp': False,
             'cbsz_abid': False,
             'sparse': False,
             'cd_opsel': False,
