@@ -71,7 +71,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -2843,10 +2843,7 @@ def parse_and_run() -> int:
         if inst_info['sparse']:
             max_abid = 0
             if int(args.cbsz) > 0:
-                if get_data_size(inst_info['in_type']) == 16:
-                    max_abid = 3
-                elif get_data_size(inst_info['in_type']) == 8:
-                    max_abid = 1
+                max_abid = calc.get_num_compression_sets() - 1
         else:
             max_abid = int(math.pow(2, int(args.cbsz))-1)
         if int(args.abid) > max_abid:
@@ -3080,6 +3077,39 @@ class InstCalc(metaclass=ABCMeta):
         ret_str += f"{self.inst_info['arch']} with wave width {self.wave_width}"
         return ret_str
 
+    @abstractmethod
+    def check_valid_reg_lane(self, matrix: str, register: int, lane: int) -> bool:
+        """ Checks if the register and lane being used for calculation are legal
+
+        Checks whether the matrix and lane being requested are legal for indexing into the
+        requested matrix. Callers should use this to ensure that the register is within the
+        bounds of the matrix. In addition, some architectures do not allow all lanes in a
+        wave to hold data in some matrices.
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+                for the compression index matrix in sparse matrix ops
+            register: Integer of the register number being requested, starting from 0
+            lane: Integer of the lane being requested, starting from 0
+
+        Returns:
+            True if the register and lane contain data for this matrix on the current instruction
+            False if the register and lane do not contain data for this matrix in this instruction
+        """
+
+    # Disabling check here because this function can be over-ridden by child classes that need
+    # this to be a method and have access to self variables.
+    #pylint: disable=no-self-use
+    def get_num_compression_sets(self) -> int:
+        """ Returns the number of compression index sets that an instruction has
+
+        Returns:
+            An integer that contains the number of compression index sets that an
+                instruction allows for the given configuration
+        """
+        # Abstract class always returns 0, only architectures where this matter needs to override
+        return 0
+
     @staticmethod
     def _get_reg_name(data_size: int, sparse: bool, compression_index: bool, k_cbsz: int,
                       k_abid: int, regno: int) -> str:
@@ -3140,16 +3170,14 @@ class InstCalc(metaclass=ABCMeta):
             elif data_size == 8:
                 this_str += (str(int(regno / 4)))
                 # See the above comment about sparse matrices. The concept is similar here
-                # in 1B values. .[7:0]/.[15:8] holding "4" values means we just report it as
+                # in 1B values. .[7:0]/.[15:8] holding 4 values means we just report it as
                 # .[15:0] holding 4 matrix entries, etc.
                 if not sparse:
                     bitno = regno % 4
                     this_str += f".[{8 * bitno + 7}:{8 * bitno}]"
                 else:
-                    if regno % 4 < 2:
-                        this_str += ".[15:0]"
-                    else:
-                        this_str += ".[31:16]"
+                    bitno = int(regno/2) % 2
+                    this_str += f".[{16 * bitno + 15}:{16 * bitno}]"
             elif data_size == 4:
                 this_str += (str(int(regno / 8)))
                 bitno = regno % 8
@@ -3354,12 +3382,8 @@ class InstCalc(metaclass=ABCMeta):
             Tuple: (matrix entry, register holding that entry, lanes within that register)
         """
 
-    @abstractmethod
     def _find_matching_b_lane(self, a_lane: int, b_lanes: List[int]) -> int:
         """ Finds the lane in a list of B matrix lanes that match the A matrix lane.
-
-        This is an abstract method, and should be filled in by any child class to
-        actually calculate this data for the target architecture.
 
         In some architectures, matrix values can exist simultaneously in multiple
         lanes. Or, more specifically, multiple lanes must store the same value from
@@ -3375,6 +3399,8 @@ class InstCalc(metaclass=ABCMeta):
         Returns:
             Integer from the available lanes of B that match the requested lane of A
         """
+        del a_lane # Unused in architectures that do not have multiple B lanes
+        return b_lanes[0]
 
     @staticmethod
     def __neg_abs_name(reg: str, mat_val: str, matrix: str, negate: Dict[str, bool]) -> str:
@@ -3801,6 +3827,13 @@ class InstCalc(metaclass=ABCMeta):
             err_line = fill(dedent(f"""Input value for 'register', {reg}, is too large.
                                    Maximum value of register for {self.inst_name} using """
                                    f"input matrix {matrix.upper()} is {total_gprs - 1}."),
+                            width=80)
+            raise ValueError(err_line)
+        if not self.check_valid_reg_lane(matrix, reg, lane):
+            err_line = fill(dedent(f"Input register {reg} and lane {lane} pair is not valid for "
+                                   f"the matrix {matrix.upper()} in the instruction "
+                                   f"{self.inst_name.upper()} on the {self.arch_name.upper()} "
+                                   "architecture."),
                             width=80)
             raise ValueError(err_line)
 
@@ -4716,28 +4749,45 @@ class InstCalcGfx9(InstCalc):
             affect the resulting calculations. This integer holds the width that will be used for
             further calculations.
     """
-    def _find_matching_b_lane(self, a_lane: int, b_lanes: List[int]) -> int:
-        """ Finds the lane in a list of B matrix lanes that match the A matrix lane.
 
-        In some architectures, matrix values can exist simultaneously in multiple
-        lanes. Or, more specifically, multiple lanes must store the same value from
-        the matrix. If a value was stored in both lanes 0 and lane 16, when printing
-        out "lane 0 of A is multiplied by lane X of B", this function will do that
-        matching. It takes as an argument a list of lanes from B, and the requested
-        lane of A. Returns the lane of B that is multiplied by the requested lane of A.
+    def check_valid_reg_lane(self, matrix: str, register: int, lane: int) -> bool:
+        """ Checks if the register and lane being used for calculation are legal
 
-        In gfx9, B matrix only has a single lane per entry, like A matrix.
-        As such, just return the first lane of B.
+        Checks whether the matrix and lane being requested are legal for indexing into the
+        requested matrix. Callers should use this to ensure that the register is within the
+        bounds of the matrix. In addition, gfx9 only allows lanes 0-63, inclusive.
 
         Args:
-            a_lane: integer for the lane of A that we want to match
-            b_lanes: list of integers containing all the lanes of B to query
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+                for the compression index matrix in sparse matrix ops
+            register: Integer of the register number being requested, starting from 0
+            lane: Integer of the lane being requested, starting from 0
 
         Returns:
-            Integer from the available lanes of B that match the requested lane of A
+            True if the register and lane contain data for this matrix on the current instruction
+            False if the register and lane do not contain data for this matrix in this instruction
         """
-        del a_lane # Unused in gfx9
-        return b_lanes[0]
+        if (lane < 0 or lane > 63):
+            return False
+        num_gprs = self._get_instruction_num_gprs(matrix)
+        if (register < 0 or register > num_gprs):
+            return False
+        return True
+
+    def get_num_compression_sets(self) -> int:
+        """ Returns the number of compression index sets that an instruction has
+
+        Returns:
+            An integer that contains the number of compression index sets that an
+                instruction allows for the given configuration
+        """
+        ret_val = 0
+        if self.arch_name.lower() == 'cdna3':
+            if get_data_size(self.inst_info['in_type']) == 16:
+                ret_val = 4
+            elif get_data_size(self.inst_info['in_type']) == 8:
+                ret_val = 2
+        return ret_val
 
     def __get_input_reg_lanes(self, M: int, K: int, B: int, i: int, k: int, b: int,
                               data_size: int, sparse: bool, compression_index: bool,
@@ -4757,7 +4807,7 @@ class InstCalcGfx9(InstCalc):
             i: integer location within the input matrix's "outer" dimension
                 For A and K matrices, this is the desired row
                 For B matrices this is the desired column
-            j: integer location within the input matrix's "inner" dimension
+            k: integer location within the input matrix's "inner" dimension
                 For A and K matrices, this is the desired column
                 For B matrices, this is the desired row
             b: integer block number within the input matrix
@@ -5486,6 +5536,31 @@ class InstCalcGfx11(InstCalc):
             affect the resulting calculations. This integer holds the width that will be used for
             further calculations.
     """
+
+    def check_valid_reg_lane(self, matrix: str, register: int, lane: int) -> bool:
+        """ Checks if the register and lane being used for calculation are legal
+
+        Checks whether the matrix and lane being requested are legal for indexing into the
+        requested matrix. Callers should use this to ensure that the register is within the
+        bounds of the matrix. In addition, ensure that the requested lane is within the
+        current wave_width settings for this instrucion + gfx 11 architecture
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+                for the compression index matrix in sparse matrix ops
+            register: Integer of the register number being requested, starting from 0
+            lane: Integer of the lane being requested, starting from 0
+
+        Returns:
+            True if the register and lane contain data for this matrix on the current instruction
+            False if the register and lane do not contain data for this matrix in this instruction
+        """
+        if (lane < 0 or lane >= (self.wave_width)):
+            return False
+        num_gprs = self._get_instruction_num_gprs(matrix)
+        if (register < 0 or register > num_gprs):
+            return False
+        return True
 
     def _find_matching_b_lane(self, a_lane: int, b_lanes: List[int]) -> int:
         """ Finds the lane in a list of B matrix lanes that match the A matrix lane.
