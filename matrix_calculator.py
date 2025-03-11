@@ -63,6 +63,7 @@ import re
 import sys
 from abc import ABCMeta, abstractmethod
 from textwrap import fill, dedent, wrap, TextWrapper
+from traceback import extract_stack
 from typing import Dict, List, Optional, TextIO, Tuple
 try:
     from typing import TypedDict
@@ -70,7 +71,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -2484,6 +2485,13 @@ def get_type_desc(data_type: str) -> str:
     """
     return dict_math_types[data_type]['description']
 
+def check_matrix_support(matrix: str, supported_list: tuple[str, ...], func_name: str) -> None:
+    """ Raises a ValueError if the requested matrix is not in the supported list """
+    if matrix.lower() not in supported_list:
+        err_str = f"Input matrix format {matrix.lower()} is not supported by "
+        err_str += f"{func_name}.{extract_stack(limit=2)[-2][2]}()"
+        raise ValueError(err_str)
+
 # Disabling the check for too many returns in this function, because we have a large
 # number of possible times we want to return on error. Rather than refactor this into
 # a huge number of single-use functions all for testing individual arguments, just
@@ -3016,36 +3024,32 @@ def parse_and_run() -> int:
         requested_output = "grid"
 
     print_arch_inst(arch_to_use, inst_to_use)
-    if args.get_register:
-        try:
+    try:
+        if args.get_register:
             calc.calculate_get_register(matrix_to_use, args.output_calc, negate,
                                         int(args.I_coordinate), int(args.J_coordinate),
                                         int(args.K_coordinate), int(args.block),
                                         int(args.cbsz), int(args.abid), int(args.blgp),
                                         int(args.opsel))
-        except ValueError as err_msg:
-            print(err_msg, file=sys.stderr)
-            return -2
-    elif args.matrix_entry:
-        try:
+        elif args.matrix_entry:
             calc.calculate_single_location(matrix_to_use, args.output_calc, negate,
                                            int(args.register), int(args.lane),
                                            int(args.cbsz), int(args.abid), int(args.blgp),
                                            int(args.opsel))
-        except ValueError as err_msg:
-            print(err_msg, file=sys.stderr)
-            return -2
-    elif args.register_layout:
-        calc.calculate_register_layout(matrix_to_use, requested_output, negate,
-                                       int(args.cbsz), int(args.abid), int(args.blgp),
-                                       int(args.opsel), bool(args.transpose))
-    elif args.matrix_layout:
-        calc.calculate_matrix_layout(matrix_to_use, requested_output, negate,
-                                     int(args.cbsz), int(args.abid), int(args.blgp),
-                                     int(args.opsel), bool(args.transpose))
-    else:
-        print("No action requested. This should not be possible!", file=sys.stderr)
-        return -1
+        elif args.register_layout:
+            calc.calculate_register_layout(matrix_to_use, requested_output, negate,
+                                           int(args.cbsz), int(args.abid), int(args.blgp),
+                                           int(args.opsel), bool(args.transpose))
+        elif args.matrix_layout:
+            calc.calculate_matrix_layout(matrix_to_use, requested_output, negate,
+                                         int(args.cbsz), int(args.abid), int(args.blgp),
+                                         int(args.opsel), bool(args.transpose))
+        else:
+            print("No action requested. This should not be possible!", file=sys.stderr)
+            return -1
+    except ValueError as err_msg:
+        print(err_msg, file=sys.stderr)
+        return -2
     return 0
 
 
@@ -3567,8 +3571,7 @@ class InstCalc(metaclass=ABCMeta):
                                    f"""{inst_info['blocks'] - 1}."""))
             raise ValueError(err_line)
 
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
 
         # Calculate register and lane based on matrix layout
         (element_name, reg, lanes) = self._get_reg_lanes(matrix, i, j, k, block,
@@ -3608,9 +3611,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         inst_info = self.inst_info
         B = inst_info['blocks']
         M = inst_info['m']
@@ -3703,8 +3704,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         return math.ceil(gpr_ratio)
 
     def calculate_single_location(self, matrix: str, out_calc: bool, negate: Dict[str, bool],
@@ -3774,8 +3774,7 @@ class InstCalc(metaclass=ABCMeta):
                 raise ValueError(f"BLGP input of {blgp} means that lane {lane} "
                                  "will not be used by this instruction.")
 
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
 
         # First, each register is held in a storage location that may be a
         # VGPR (32b values), part of a VGPR (<32b values) or multiple VGPRs
@@ -3877,8 +3876,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         if ((self.inst_info['sparse'] and matrix.lower() == 'a') or matrix.lower() == 'k'):
             ret_this = 0.5
         else:
@@ -3978,9 +3976,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         inst_info = self.inst_info
         M = inst_info['m']
         N = inst_info['n']
@@ -4107,9 +4103,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         inst_info = self.inst_info
         M = inst_info['m']
         N = inst_info['n']
@@ -4216,9 +4210,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         inst_info = self.inst_info
         if in_lanes is None:
             in_lanes = self.wave_width
@@ -4300,9 +4292,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         if matrix.lower() in ('a', 'b', 'k'):
             ret_str = self._coord_to_input_reg_eqn(matrix, wave_size)
         else: # C/D matrices
@@ -4403,9 +4393,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'c', 'd', 'k'), self.__class__.__name__)
         del wave_size # Unused by base class
         ret_string = "Unknown" # c and d matrix must be handled by child classes
         if matrix.lower() == 'a':
@@ -4445,8 +4433,7 @@ class InstCalc(metaclass=ABCMeta):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('b', 'c', 'd'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('b', 'c', 'd'), self.__class__.__name__)
         if matrix.lower() == 'b':
             ret_string = self.__reg_lane_to_input_ij_coord_eqn()
         else: # c or d
@@ -5005,8 +4992,7 @@ class InstCalcGfx9(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         # In gfx9, we always use all 64 lanes for input calculations, but output sizes
         # can change for 64b outputs
         if out_size is None:
@@ -5032,9 +5018,7 @@ class InstCalcGfx9(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'k'), self.__class__.__name__)
         del wave_size # Unused in gfx9
         inst_info = self.inst_info
         in_size = get_data_size(inst_info['in_type'])
@@ -5144,9 +5128,7 @@ class InstCalcGfx9(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         inst_info = self.inst_info
         in_size = get_data_size(inst_info['in_type'])
         out_type = inst_info['out_type']
@@ -5229,9 +5211,7 @@ class InstCalcGfx9(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'c', 'd', 'k'), self.__class__.__name__)
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix, wave_size)
         if matrix not in ('a', 'b', 'k'):
             inst_info = self.inst_info
@@ -5274,9 +5254,7 @@ class InstCalcGfx9(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
-
+        check_matrix_support(matrix, ('a', 'b', 'k'), self.__class__.__name__)
         inst_info = self.inst_info
         in_gprs = self._get_instruction_num_gprs(matrix)
         data_type = inst_info['in_type']
@@ -5452,8 +5430,7 @@ class InstCalcGfx9(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd', 'k'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
         if matrix.lower() in ('a', 'b'):
             ret_string = self.__reg_lane_to_input_block_eqn()
         else:
@@ -5685,8 +5662,7 @@ class InstCalcGfx11(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd'), self.__class__.__name__)
         if (matrix.lower() in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16 and
                 opsel == 4):
             offset = 1
@@ -5723,8 +5699,7 @@ class InstCalcGfx11(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd'), self.__class__.__name__)
         if (matrix.lower() in ('c', 'd') and get_data_size(self.inst_info['out_type']) == 16):
             num_regnos_to_print = math.ceil(gpr_ratio/2)
         else:
@@ -5848,8 +5823,7 @@ class InstCalcGfx11(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b'), self.__class__.__name__)
         del wave_size # Unused in gfx11
         data_size = get_data_size(self.inst_info['in_type'])
         if data_size == 16:
@@ -5901,8 +5875,7 @@ class InstCalcGfx11(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b', 'c', 'd'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd'), self.__class__.__name__)
         if matrix.lower() == 'a':
             if wave_size == 32:
                 ret_this = 'i and i+16'
@@ -5977,8 +5950,7 @@ class InstCalcGfx11(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'c', 'd'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'c', 'd'), self.__class__.__name__)
         ret_string = super()._reg_lane_to_i_coord_eqn(matrix, wave_size)
         if matrix not in ('a', 'b', 'k') and wave_size is not None:
             ret_string = f"{int(wave_size / 16)} * GPR_num + floor(lane / 16)"
@@ -6007,8 +5979,7 @@ class InstCalcGfx11(InstCalc):
         Raises:
             ValueError: An unsupported matrix was requested.
         """
-        if matrix.lower() not in ('a', 'b'):
-            raise ValueError(f"Input matrix format {matrix.lower()} is not supported.")
+        check_matrix_support(matrix, ('a', 'b'), self.__class__.__name__)
         data_size = get_data_size(self.inst_info['in_type'])
         if data_size == 16:
             ret_string = "2 * GPR_num + floor(GPR_bits / 16)"
