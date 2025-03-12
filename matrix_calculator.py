@@ -126,7 +126,7 @@ class MatrixNumericalType(TypedDict):
     size: int
     description: str
 
-# Dictionary for claculating the size of particular data types
+# Dictionary for calculating the size of particular data types
 dict_math_types: Dict[str, MatrixNumericalType] = {
     'fp64': {
         'size': 64,
@@ -188,7 +188,7 @@ class MatrixInstruction(TypedDict):
 
     A typed dictionary container for the data that defines a matrix multiplication instruction in
     this tool. The details of how the matrix multiplication instruction, the matrix it works on,
-    the avaialble modifiers, and the performance are contained in a series of fields in this
+    the available modifiers, and the performance are contained in a series of fields in this
     container.
 
     Attributes:
@@ -2969,7 +2969,7 @@ def print_instructions(arch: str, instructions: Dict[str, MatrixInstruction],
     Args:
         arch: string that contains the accelerator architecture's name to print
         instructions: dictionary of [mnemonic, instruction_details] pairs for
-            the instructions avaialble in this architecture. All of the mnemonics
+            the instructions available in this architecture. All of the mnemonics
             will be printed by this function.
         to_print: file to print instruction to.
 
@@ -3032,7 +3032,7 @@ def parse_and_run() -> int:
 
     Parses the command-line arguments for this script, then run the requested functions.
     Prints help about the application if requested, or if bad arguments are passed in.
-    Checsk to make sure the arguments are valid  respect to one another and gives
+    Checks to make sure the arguments are valid  respect to one another and gives
     recommendations if they are not.
 
     Returns:
@@ -3390,7 +3390,7 @@ def parse_and_run() -> int:
                 print(" may only be set to zero.", file=sys.stderr)
             return -2
     # BLGP chooses between 8 different B matrix lane swizzles or broadcasts. 0 is default.
-    # In CDNA3, the three BLGP bits are used to automaticlaly negate the values in
+    # In CDNA3, the three BLGP bits are used to automatically negate the values in
     # matrices A, B, and C, respectively.
     if int(args.blgp) > 0:
         if not inst_info['blgp']:
@@ -3717,7 +3717,7 @@ class InstCalc(metaclass=ABCMeta):
                 compression_index=True and k_cbsz!=0, this integer field holds the
                 instruction's ABID modifier.
             k_opsel_offset: When working on compression indices in gfx12, the OPSEL field chooses
-                which register location to use. As such, when passin gin compression_index=true,
+                which register location to use. As such, when passing in compression_index=true,
                 this field holds the number of VGPR bits this instruction's OPSEL modifier shifted
                 the output.
             regno: integer that holds the 'regno' (register storage location) that this
@@ -3791,7 +3791,7 @@ class InstCalc(metaclass=ABCMeta):
             # Move the register up by (8 / N) register slots for every value of ABID
             if k_cbsz != 0:
                 regno += int((64 * k_abid) / data_size)
-            # Do a floor(regno / 2) to get the base register bits that will hold thise register,
+            # Do a floor(regno / 2) to get the base register bits that will hold this register,
             # then multiply by 4 to offset the bits.
             index = int(regno / 2) * 4
             # On some architectures, OPSEL will shift these starting locations instead of the
@@ -3890,10 +3890,10 @@ class InstCalc(metaclass=ABCMeta):
 
     @staticmethod
     def _get_blgp_transformed_lane(lane: int, blgp: int) -> int:
-        """ Calculates the newlane used for an input after BLGP transformation.
+        """ Calculates the new lane used for an input after BLGP transformation.
 
         For some instructions, BLGP will cause the B matrix input into the math functions
-        to be pulled from different lanes than normal. This function salculate how BLGP
+        to be pulled from different lanes than normal. This function calculate how BLGP
         transforms a B matrix lane.
 
         Calculations are:
@@ -3901,8 +3901,8 @@ class InstCalc(metaclass=ABCMeta):
         BLGP=1 : Broadcast the first 32 lanes to all lanes
         BLGP=2 : Broadcast the 2nd 32 lanes to all lanes
         BLGP=3 : Rotate all lanes down by 16
-        BLGP=4 : Braodcast the first 16 lanes
-        BLGP=5 : Broadast the 2nd 16 lanes
+        BLGP=4 : Broadcast the first 16 lanes
+        BLGP=5 : Broadcast the 2nd 16 lanes
         BLGP=6 : Broadcast the 3rd 16 lanes
         BLGP=7 : Broadcast the 4th 16 lanes
 
@@ -4140,7 +4140,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             out_calc: True if, when printing the register location for the D
                 output matrix entry, you desire to also print the register
                 locations of the A, B, and C matrices that went into the
@@ -4220,7 +4220,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
             blgp: integer value of the instruction's BLGP modifier
@@ -4288,7 +4288,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             opsel: integer value of the instruction's OPSEL modifier
 
         Returns:
@@ -4306,7 +4306,7 @@ class InstCalc(metaclass=ABCMeta):
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
         instead of storing two contiguous values, one in the lower and one in the upper.
-        In sucharchitectures and for  certain matrices, the OPSEL value controls whether
+        In such architectures and for  certain matrices, the OPSEL value controls whether
         to use the upper or lower halves.
 
         This function returns the number of slots to print in each register; the rest can
@@ -4318,7 +4318,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             gpr_ratio: the number of regnos in each GPR
 
         Returns:
@@ -4345,12 +4345,12 @@ class InstCalc(metaclass=ABCMeta):
         all of the matrix entries, one line at a time.
 
         If a single matrix entry can't fit in a VGPR (e.g. a 64b matrix entry requires
-        2 32b VGPR entries), we print a single ntry with V[n+1:n]{lane}, regardless
+        2 32b VGPR entries), we print a single entry with V[n+1:n]{lane}, regardless
         of whether the requested register was Vn+1 or Vn.
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             out_calc: True if, when printing the matrix entry for the D output
                 location, you desire to also print the matrix entries of the A, B,
                 and C matrices that went into the calculation of the output
@@ -4488,8 +4488,8 @@ class InstCalc(metaclass=ABCMeta):
 
         When printing out the matrix entries are specific register/lane combinations, we
         sometimes have more than one register at that location. For instance, SMFMAC
-        instructions have 4 entires in a register that would only hold two values -- two of the
-        entries are compressed out. For the compression indicies, we have the similar type of
+        instructions have 4 entries in a register that would only hold two values -- two of the
+        entries are compressed out. For the compression indices, we have the similar type of
         compression. As such, we need to move the "regno" (the actual register{lane}.subset
         combination) ahead by a certain amount for every matrix entry we print.
 
@@ -4497,7 +4497,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
 
         Returns:
             Floating point scaling calculation, e.g. a value of 0.5 indicates that there are
@@ -4591,7 +4591,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             requested_output: string that indicates the type of output, from the list of
                 csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
@@ -4618,7 +4618,7 @@ class InstCalc(metaclass=ABCMeta):
         for b in range(B):
             if matrix.lower() in ('a', 'k'):
                 if print_blocks:
-                    # By setting CBSZ and ABID, it is possible to have mutliple blocks
+                    # By setting CBSZ and ABID, it is possible to have multiple blocks
                     # of the matrix math stored in a single register. So we want to
                     # print them as a single group.
                     if matrix.lower() == 'a':
@@ -4718,7 +4718,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             requested_output: string that indicates the type of output, from the list of
                 csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
@@ -5086,7 +5086,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, and k (for the compression index of sparse matrics).
+                Legal values are a, b, and k (for the compression index of sparse matrices).
             wave_size: integer that holds the wave size for the requested conversion function
                 Legal values are 32 and 64.
 
@@ -5108,7 +5108,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
@@ -5666,7 +5666,7 @@ class InstCalcGfx9(InstCalc):
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
         instead of storing two contiguous values, one in the lower and one in the upper.
-        In sucharchitectures and for  certain matrices, the OPSEL value controls whether
+        In such architectures and for  certain matrices, the OPSEL value controls whether
         to use the upper or lower halves.
 
         This function returns the number of slots to print in each register; the rest can
@@ -5936,7 +5936,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, and k (for the compression index of sparse matrics).
+                Legal values are a, b, and k (for the compression index of sparse matrices).
             wave_size: integer that holds the wave size for the requested conversion
                 function. gfx9 only supports wave64.
 
@@ -6114,7 +6114,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
@@ -6192,7 +6192,7 @@ class InstCalcGfx11(InstCalc):
         Checks whether the matrix and lane being requested are legal for indexing into the
         requested matrix. Callers should use this to ensure that the register is within the
         bounds of the matrix. In addition, ensure that the requested lane is within the
-        current wave_width settings for this instrucion + gfx 11 architecture
+        current wave_width settings for this instruction + gfx 11 architecture
 
         Args:
             matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
@@ -6400,7 +6400,7 @@ class InstCalcGfx11(InstCalc):
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
         instead of storing two contiguous values, one in the lower and one in the upper.
-        In sucharchitectures and for  certain matrices, the OPSEL value controls whether
+        In such architectures and for  certain matrices, the OPSEL value controls whether
         to use the upper or lower halves.
 
         This function returns the number of slots to print in each register; the rest can
@@ -6816,7 +6816,7 @@ class InstCalcGfx12(InstCalc):
         Checks whether the matrix and lane being requested are legal for indexing into the
         requested matrix. Callers should use this to ensure that the register is within the
         bounds of the matrix. In addition, ensure that the requested lane is within the
-        current wave_width settings for this instrucion + gfx 11 architecture
+        current wave_width settings for this instruction + gfx 11 architecture
 
         Args:
             matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
@@ -7203,7 +7203,7 @@ class InstCalcGfx12(InstCalc):
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
         instead of storing two contiguous values, one in the lower and one in the upper.
-        In sucharchitectures and for  certain matrices, the OPSEL value controls whether
+        In such architectures and for  certain matrices, the OPSEL value controls whether
         to use the upper or lower halves.
 
         This function returns the number of slots to print in each register; the rest can
@@ -7667,7 +7667,7 @@ class InstCalcGfx12(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, and k (for the compression index of sparse matrics).
+                Legal values are a, b, and k (for the compression index of sparse matrices).
             wave_size: integer that holds the wave size for the requested conversion
                 function. gfx12 supports wave64 and wave32.
 
