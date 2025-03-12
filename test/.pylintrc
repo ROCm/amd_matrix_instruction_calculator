@@ -33,7 +33,9 @@ evaluation=10.0 - ((float(5 * error + warning + refactor + convention) / stateme
 # some complex nesting. This is not universally good software engineering pratice,
 # but this makes some of the code (such as loops handling multi-dimensional matrix
 # unrolling) more natural.
-disable=too-many-arguments,
+disable=unknown-option-value,
+        too-many-arguments,
+        too-many-positional-arguments,
         too-many-branches,
         too-many-locals,
         too-many-lines,
