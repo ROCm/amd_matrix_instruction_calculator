@@ -1,5 +1,5 @@
 AMD Matrix Instruction Calculator
-=====================================================================================
+=======================================================================================================
 
 This repository contains a tool for generating information about the matrix multiplication instructions in AMD Radeon&trade; and AMD Instinct&trade; accelerators.
 This tool allows users to generate instruction-level information such as computational throughput and register usage.
@@ -23,7 +23,7 @@ Some matrix multiplication instructions may be modified by fields in the instruc
 This tool allows setting these fields, which may modify the output of the other queries.
 
 Table of Contents
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 
 * [AMD Matrix Instruction Calculator](#amd-matrix-instruction-calculator)
     * [Prerequisites](#prerequisites)
@@ -31,6 +31,7 @@ Table of Contents
         * [General-purpose Configuration Parameters](#general-purpose-configuration-parameters)
         * [Querying Matrix Multiplication Instruction Information](#querying-matrix-multiplication-instruction-information)
         * [Choosing the Matrix to Query](#choosing-the-matrix-to-query)
+        * [Modifying the Queried Matrix](#modifying-the-queried-matrix)
         * [Querying Register and Lane Information for a Single Matrix Element](#querying-register-and-lane-information-for-a-single-matrix-element)
         * [Querying the Matrix Element Coordinates for a Register and Lane Combination](#querying-the-matrix-element-coordinates-for-a-register-and-lane-combination)
         * [Printing the Register and Lane Layout for an Entire Matrix](#printing-the-register-and-lane-layout-for-an-entire-matrix)
@@ -43,22 +44,22 @@ Table of Contents
         * [Example of Querying the Source Matrix Entries for D Matrix Outputs](#example-of-querying-the-source-matrix-entries-for-d-matrix-outputs)
     * [Example of Printing the Registers and Lanes for an Entire Matrix](#example-of-printing-the-registers-and-lanes-for-an-entire-matrix)
     * [Example of Printing the Matrix Elements for all Registers and Lanes](#example-of-printing-the-matrix-elements-for-all-registers-and-lanes)
-     * [Examples of Setting Modifiers on AMD CDNA™ Architectures](#examples-of-setting-modifiers-on-amd-cdna-architectures)
+     * [Examples of Setting Modifiers in AMD CDNA™ Architectures](#examples-of-setting-modifiers-in-amd-cdna-architectures)
         * [Example of Using the CBSZ and ABID Modifiers to Change the A Matrix Layout](#example-of-using-the-cbsz-and-abid-modifiers-to-change-the-a-matrix-layout)
         * [Example of Using the BLGP Modifier to Change the B Matrix Layout](#example-of-using-the-blgp-modifier-to-change-the-b-matrix-layout)
-            * [Example of Using the BLGP Modifier to Negate Input Matrices on CDNA™ 3 Architectures](#example-of-using-the-blgp-modifier-to-negate-input-matrices-on-cdna-3-architectures)
+            * [Example of Using the BLGP Modifier to Negate FP64 Input Matrices in the CDNA™ 3 Architecture](#example-of-using-the-blgp-modifier-to-negate-fp64-input-matrices-in-the-cdna-3-architecture)
         * [Example of Printing Compression Index Information for a Sparse Matrix Instruction](#example-of-printing-compression-index-information-for-a-sparse-matrix-instruction)
-    * [Examples of Setting Modifiers on AMD RDNA™ Architectures](#examples-of-setting-modifiers-on-amd-rdna-architectures)
-        * [Example of Using the OPSEL Modifier to Change the C and D Matrix Storage](#example-of-using-the-opsel-modifier-to-change-the-c-and-d-matrix-storage)
+    * [Examples of Setting Modifiers in the AMD RDNA™ 3 Architecture](#examples-of-setting-modifiers-in-the-amd-rdna-3-architecture)
+        * [Example of Using the OPSEL Modifier to Change the C and D Matrix Storage in the AMD RDNA™ 3 Architecture](#example-of-using-the-opsel-modifier-to-change-the-c-and-d-matrix-storage-in-the-amd-rdna-3-architecture)
         * [Example of Using the NEG Modifier to Negate Input Matrices](#example-of-using-the-neg-modifier-to-negate-input-matrices)
     * [Details of AMD Matrix Multiplication Instruction Encodings](#details-of-amd-matrix-multiplication-instruction-encodings)
-        * [Details of the VOP3P-MAI Matrix Multiplication Instruction Encoding for AMD CDNA™ 1 - CDNA 3 Architectures](#details-of-the-vop3p-mai-matrix-multiplication-instruction-encoding-for-amd-cdna-1-cdna-3-architectures)
-        * [Details of the VOP3P Matrix Multiplication Instruction Encoding for AMD RDNA™ 3 Architectures](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-for-amd-rdna-3-architectures)
+        * [Details of the VOP3P-MAI Matrix Multiplication Instruction Encoding in the AMD CDNA™ 1 - CDNA 3 Architectures](#details-of-the-vop3p-mai-matrix-multiplication-instruction-encoding-in-the-amd-cdna-1---cdna-3-architectures)
+        * [Details of the VOP3P Matrix Multiplication Instruction Encoding in the AMD RDNA™ 3 Architecture](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-in-the-amd-rdna-3-architecture)
     * [Further Materials](#further-materials)
     * [Trademark Attribution](#trademark-attribution)
 
 Prerequisites
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 This tool requires the following:
 * Python3
 * The Python package `tabulate`:
@@ -71,7 +72,7 @@ This tool requires the following:
 * Now users can use `pip install -r requirements.txt` to install dependent packages
 
 Calculator Usage
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 This tool offers many command line parameters to configure the desired information to print.
 This section details what these parameters do and how users should configure them to achieve desired results.
 
@@ -112,14 +113,14 @@ This tool allows setting these modifiers on instructions that support them.
 The modifiers will change the output of register and matrix element queries to match what the instruction would do with the modifier fields set.
 
 * `--cbsz {#}`: Change the Control Broadcast Size field on instructions that support it. This causes some blocks of the A matrix to be broadcast to the Matrix Core in place of other blocks. This modifier configures how many blocks will receive that broadcast, the ABID modifier chooses which block to broadcast. This is only supported by some instructions and is only useful for queries of the A and K matrices. The legal values are between 0 and $`log_2(blocks)`$, inclusive.
-* `--abid {#}`: Change the A-matrix Broadcast Identifier field on instructions that support it. This chooses the block of the A matrix to broadcast to the Matrix Core, in conjunction with the CBSZ modifier. This is only supported by some instructions and is only useful for queries of the A and K matrices. The legal values are between 0 and $`2^{CBSZ}-1`$, inclusive.
+* `--abid {#}`: Change the A-matrix Broadcast Identifier field on instructions that support it. In some architectures, this chooses the block of the dense A matrix to broadcast to the Matrix Core, in conjunction with the CBSZ modifier. This is only supported by some instructions and is only useful for queries of the A and K matrices. For these instructions, the legal values are between 0 and $`2^{CBSZ}-1`$, inclusive. In other architectures, this is used to pick between compression index sets.
 * `--blgp {#}`: Change the B-matrix Lane Group Pattern field on instructions that support it. This causes some input lanes of the B matrix to be rotated or broadcast to replace the matrix multiplication inputs that would have originally come from a different lane. This is only supported by some instructions. For instructions where it is supported, valid values are between 0-7, inclusive.
-* `--opsel {#}`: Change the Operand Select field on instructions that support it. This causes some 16-bit inputs and outputs to be stored in either the top or bottom half of the 32-bit registers, rather than packing two values into the register. For those instructions, this field chooses whether to read and write from the top of bottom half of those registers.
+* `--opsel {#}`: Change the Operand Select field on instructions that support it. In some architectures, this causes some 16-bit inputs and outputs to be stored in either the top or bottom half of the 32-bit registers, rather than packing two values into the register. For those instructions, this field chooses whether to read and write from the top of bottom half of those registers. In other architectures, this is used to pick between compression index sets.
 * `--neg {#}`: Change the NEG (Negate) field on instructions that support it. The bits in this 3-bit field indicate whether to negate the values read from the A\[\], B\[\], or C\[\] matrices, respectively. For instructions where it is supported, valid values are between 0-7, inclusive.
-* `--neg_hi {#}`: Change the NEG\_HI (Negate Hi Bits) field on instructions that support it. The bits in this 3-bit field indicate whether to negate the values read from the A\[\], B\[\], or C\[\] matrices, respectively. For instructions where it is supported, valid values are between 0-7, inclusive.
+* `--neg_hi {#}`: Change the NEG\_HI (Negate Hi Bits) field on instructions that support it. The bits in this 3-bit field indicate whether to negate the values read from the A\[\] or B\[\] matrices, or to take the absolute value from C\[\] matrices. For instructions where it is supported, valid values are between 0-7, inclusive.
 
 ### Querying Register and Lane Information for a Single Matrix Element
-The `--get-register` parameter will cause the tool to print the vector register number and the lane within that vector register that holds the matrix element at a single coordinate within the desired matrix.
+The `--get-register` parameter will cause the tool to print the vector register number, the lane within that vector register, and the bits within each vector register lane that holds the matrix element at a single coordinate within the desired matrix.
 
 * `--get-register` (or `-g`): This parameter can be further configured using some of the following options. The options used depend on both the instruction and matrix being queried.
     * `--I-coordinate {#}` (or `-I {#}`): Chooses the i coordinate, the row for A, C, D, or K matrices. Ignored for B matrix. Default value when this option is not used is 0.
@@ -133,13 +134,13 @@ The `--matrix-entry` parameter will cause the tool to print the row, column, and
 
 * `--matrix-entry` (or `-m`): This parameter can be further configured using the following options.
     * `--register {#}` (or `-r {#}`): Chooses the register number to query. The number must be a whole number (&ge; 0). The maximum register value depends on the chosen instruction. Default value when this option is not used is 0.
-    * `--lane {#}` (or `-l {#}`): Chooses the vector lane within the register to query. This number must be between 0 and 63, inclusive. Default value when this option is not used is 0.
+    * `--lane {#}` (or `-l {#}`): Chooses the vector lane within the register to query. This number must be between 0 and the size of the wave minus 1, inclusive. Default value when this option is not used is 0.
     * `--output-calculation` (or `-o`): This option is only valid with the `--D-matrix` parameter. With this option set, the tool will print the row, column, and block information for both the D output matrix and all of the A, B, and C matrix entries that went into calculating it.
 
 ### Printing the Register and Lane Layout for an Entire Matrix
 The `--register-layout` parameter will print a tabular layout of the chosen matrix.
 For each element in the matrix, print out the vector register number that will be used and the lane within that register.
-If a single 32b register holds multiple matrix elements, it will differentiate the lo/hi nibble, or the bits within the register that holds the element.
+If a single 32b register holds multiple matrix elements, it will differentiate the bits within the register that holds the element.
 
 * `--register-layout` (or `-R`): Print the registers and lanes for each element of the chosen matrix. This will print in an ASCII tabular format by default.
     * `--csv` (or `-c`): If this option is also passed, the tool will print the same information, but in a CSV (comma-separated value) format instead of an ASCII table.
@@ -150,7 +151,7 @@ If a single 32b register holds multiple matrix elements, it will differentiate t
 ### Printing the Matrix Element Layout for all Registers and Lanes
 The `--matrix-layout` parameter will print a tabular layout of the chosen matrix.
 For each register used by the matrix, and the lanes within those registers, print out the matrix element or elements that are stored in that register + lane combination.
-If a single 32b register holds multiple matrix elements, the tool will print out the table split into nibbles, bytes, or bits (whatever holds a single element).
+If a single 32b register holds multiple matrix elements, the tool will print out the table split into bit ranges.
 
 * `--matrix-layout` (or `-M`): Print the matrix elements for each register/lane combination. This will print in an ASCII tabular format by default.
     * `--csv` (or `-c`): If this option is also passed, the tool will print the same information, but in a CSV (comma-separated value) format instead of an ASCII table.
@@ -159,8 +160,8 @@ If a single 32b register holds multiple matrix elements, the tool will print out
     * `--transpose`: If this option is also passed, the tool will print the register layout in a transposed format, swapping rows and columns.
 
 Example of Querying the List of Instructions in a Chip
--------------------------------------------------------------------------------------
-The `--list-instructions` flag allows users to query which matrix multiplication instructions are available on a chosen architecture.
+-------------------------------------------------------------------------------------------------------
+The `--list-instructions` flag allows users to query which matrix multiplication instructions are available in a chosen architecture.
 These are the instructions that are supported by the `--instruction` flag.
 
 The following is an example usage, where we query the list of instructions in the CDNA&trade; 2 architecture:
@@ -197,8 +198,8 @@ Available instructions in the CDNA2 architecture:
 ```
 
 Example of Querying Instruction Information
--------------------------------------------------------------------------------------
-The `--detail-instruction` flag allows users to query information about the desired matrix multiplication instruction on a chosen architecture.
+-------------------------------------------------------------------------------------------------------
+The `--detail-instruction` flag allows users to query information about the desired matrix multiplication instruction in a chosen architecture.
 This information includes:
 * The instruction encoding class and opcode
 * The matrix dimensions and number of blocks used by the instruction
@@ -211,7 +212,7 @@ This information includes:
 
 This flag requires the `--architecture` and `--instruction` flags to be set to pick the chip and instruction to detail.
 
-The following is an example usage, where we are querying information about the V\_MFMA\_F32\_4X4X1F32 instruction on the CDNA&trade; 2 architecture:
+The following is an example usage, where we are querying information about the V\_MFMA\_F32\_4X4X1F32 instruction in the CDNA&trade; 2 architecture:
 ```
 $ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f32_4x4x1f32 --detail-instruction
 Architecture: CDNA2
@@ -277,7 +278,7 @@ Instruction: V_MFMA_F32_4X4X1F32
 ```
 
 Example of Querying Register and Lane for a Single Matrix Element
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 The `--get-register` flag allows users to query an element within a matrix for a desired instruction.
 The tool will then translate this matrix entry into the vector register and lane number within that register that contain the value.
 
@@ -293,7 +294,7 @@ Any parameter that is not explicitly set will default to 0.
 The output format is printed in the form: `Vx{y}.z`, where:
 * `x` is the vector register offset from the value put into the matrix multiplication instruction's register field.
 Registers holding 64-bit values are printed as a register pair, `[x+1:x]`.
-* `y` is the lane within the 64-wide vector register
+* `y` is the lane within the vector register
 * `.z` is an optional identifier for sub-register if the matrix value is less than 32 bits
     * `.[15:0]` is the least significant 16b of a 32b register
     * `.[31:16]` is the most significant 16b of a 32b register
@@ -303,7 +304,7 @@ Registers holding 64-bit values are printed as a register pair, `[x+1:x]`.
     * `.[31:24]` is the most significant 8b of a 32b register
     * `.[hi_bit:lo_bit]` is also used to show the bit-range for values smaller than 8b
 
-The following is an example that requests the register which holds the 16-bit value in the 4th block of matrix A at coordinate `A[1][2]` of the V\_MFMA\_F32\_4X4X4F16 on the CDNA&trade; 2 architecture:
+The following is an example that requests the register which holds the 16-bit value in the 4th block of matrix A at coordinate `A[1][2]` of the V\_MFMA\_F32\_4X4X4F16 in the CDNA&trade; 2 architecture:
 ```
 $ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f32_4x4x4f16 --get-register --I-coordinate 1 --K-coordinate 2 --block 4 --A-matrix
 Architecture: CDNA2
@@ -326,7 +327,7 @@ The register name to matrix mapping can be found by querying the instruction usi
 
 This option is only valid when the `--D-matrix` parameter is used.
 
-The following is an example that requests the output register and input registers used to calculate the value at coordinate `D[3][2]` of the 1st block for the instruction V\_MFMA\_F32\_4X4X4F16 on the CDNA&trade; 2 architecture:
+The following is an example that requests the output register and input registers used to calculate the value at coordinate `D[3][2]` of the 1st block for the instruction V\_MFMA\_F32\_4X4X4F16 in the CDNA&trade; 2 architecture:
 ```
 $ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f32_4x4x4f16 --get-register --I-coordinate 3 --J-coordinate 2 --block 1 --D-matrix --output-calculation
 Architecture: CDNA2
@@ -337,7 +338,7 @@ D[3][2].B1 = Vdst_v3{6} = Src0_v0{7}.[15:0]*Src1_v0{6}.[15:0] + Src0_v0{7}.[31:1
 This output shows the four multiplications and five additions that are used to calculate this output matrix entry, as well as which registers are used as input to these calculations.
 
 Example of Querying Matrix Element Information for a Register and Lane
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 The `--matrix-entry` flag allows users to query a register and lane combination for a desired instruction.
 The tool will then translate this vector-lane pair into the matrix entry (or entries) that it holds.
 
@@ -353,7 +354,7 @@ The output format is printed in the form: `Matrix[row][col].block`, where:
 * `col` is the column of the matrix, such as the `k` input to the A matrix or the `j` input to the B matrix
 * `.block` is the block within the matrix, since some matrix multiplication instructions work on multiple separate blocks of $`NxMxK`$ matrix multiplications
 
-The following is an example that requests the matrix entries which are contained in the 17th lane of register 1 of matrix A for the instruction V\_MFMA\_F32\_4X4X4F16 on the CDNA&trade; 2 architecture:
+The following is an example that requests the matrix entries which are contained in the 17th lane of register 1 of matrix A for the instruction V\_MFMA\_F32\_4X4X4F16 in the CDNA&trade; 2 architecture:
 ```
 $ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f32_4x4x4f16 --matrix-entry --register 1 --lane 17 --A-matrix
 Architecture: CDNA2
@@ -375,7 +376,7 @@ This can be useful when debugging incorrect answers because it allows developers
 
 This option is only valid when the `--D-matrix` parameter is used.
 
-The following is an example that requests the output matrix entry and input matrix entries used to calculate the value at coordinate the 33rd lane of register 2 for matrix D for the instruction V\_MFMA\_F32\_4X4X4F16 on the CDNA&trade; 2 architecture:
+The following is an example that requests the output matrix entry and input matrix entries used to calculate the value at coordinate the 33rd lane of register 2 for matrix D for the instruction V\_MFMA\_F32\_4X4X4F16 in the CDNA&trade; 2 architecture:
 ```
 $ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f32_4x4x4f16 --matrix-entry --register 2 --lane 33 --D-matrix --output-calculation
 Architecture: CDNA2
@@ -386,7 +387,7 @@ v2{33} = D[2][1].B8 = A[2][0].B8*B[0][1].B8 + A[2][1].B8*B[1][1].B8 + A[2][2].B8
 This output shows the four multiplications and five additions that are used to calculate this output matrix entry, including what their `i`, `j`, and `k` coordinates are, as well as their block number.
 
 Example of Printing the Registers and Lanes for an Entire Matrix
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 The `--register-layout` flag allows users to query the register and lane locations for all entries in a target matrix.
 The tool will translate each matrix coordinate into a register description, format the matrix as a table, and print it to the screen.
 
@@ -402,7 +403,7 @@ In all cases, users may want to pipe the output into another tool such as `less 
 Finally, the optional `--transpose` parameter will swap output table's rows and column.
 This will not cause any change to the matrix itself or the registers that hold the matrix entries; the `--transpose` parameter only changes the layout of the data output by this tool.
 
-The following is an example that requests the layout of the matrix D for the V\_MFMA\_F64\_4X4X4F64 instruction on CDNA&trade; 2 architecture.
+The following is an example that requests the layout of the matrix D for the V\_MFMA\_F64\_4X4X4F64 instruction in CDNA&trade; 2 architecture.
 ```
 $ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f64_4x4x4f64 --register-layout --D-matrix
 Architecture: CDNA2
@@ -460,7 +461,7 @@ This instruction has four output blocks, and they are printed one after another.
 Each block is a 4x4 matrix; each entry is printed in the same `Vx{y}.z` format described in [the previous section](#example-of-querying-register-and-lane-for-a-single-matrix-element).
 
 Example of Printing the Matrix Elements for all Registers and Lanes
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 The `--matrix-layout` flag allows users to query the matrix entry locations for all the registers used by a matrix multiplication instruction for one of its input matrices.
 The tool will translate the lanes in each matrix into the matrix entry at that coordinate, format this output as a table, and print it to the screen.
 
@@ -476,7 +477,7 @@ In all cases, users may want to pipe the output into another tool such as `less 
 Finally, the optional `--transpose` parameter will swap output table's rows and column.
 This will not cause any change to the matrix itself or the registers that hold the matrix entries; the `--transpose` parameter only changes the layout of the data output by this tool.
 
-The following is an example that requests entries for all registers used by the V\_MFMA\_F64\_4X4X4F64 instruction on the CDNA&trade; 2 architecture.
+The following is an example that requests entries for all registers used by the V\_MFMA\_F64\_4X4X4F64 instruction in the CDNA&trade; 2 architecture.
 ```
 ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f64_4x4x4f64 --matrix-layout --D-matrix
 Architecture: CDNA2
@@ -617,8 +618,8 @@ Instruction: V_MFMA_F64_4X4X4F64
 This instruction only requires a single vector register-pair (because it has a 64b output), so it only has one column of 64 entries: one entry per lane.
 Each entry is printed in the same `Matrix[row][col].block` format described in [the previous section](#example-of-querying-matrix-element-information-for-a-register-and-lane).
 
-Examples of Setting Modifiers on AMD CDNA&trade; Architectures
--------------------------------------------------------------------------------------
+Examples of Setting Modifiers in AMD CDNA&trade; Architectures
+-------------------------------------------------------------------------------------------------------
 AMD Instinct&trade; accelerators that use CDNA architectures allow setting modifier fields that change how the matrix multiplication instructions access data out of registers.
 Examples of using these fields, `CBSZ`, `ABID`, and `BLGP`, are shown below.
 The CDNA 3 architecture also allows sparse matrix multiplication, which has a separate compression index matrix.
@@ -961,20 +962,20 @@ Block 3
 +-----------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
 ```
 
-#### Example of Using the BLGP Modifier to Negate Input Matrices on CDNA&trade; 3 Architectures
--------------------------------------------------------------------------------------
+#### Example of Using the BLGP Modifier to Negate FP64 Input Matrices in the CDNA&trade; 3 Architecture
+-------------------------------------------------------------------------------------------------------
 The CDNA&trade; 2 architecture added support for matrix multiplication instructions that use double-precision floating point (FP64) numbers.
 In the accelerators using the CDNA 2 architecture, the BLGP field is disallowed.
 The AMD Instinct&trade; MI300 accelerators use the CDNA 3 architecture and enhance the 64-bit floating point matrix multiplication instructions to use the BLGP fields.
-However, the BLGP modifier field does not affect these FP64 MFMA instructions [as described above](#example-of-using-the-blgp-modifier-to-change-the-b-matrix-layout).
+However, the BLGP modifier field does not affect these FP64 MFMA instructions [in the manner described above](#example-of-using-the-blgp-modifier-to-change-the-b-matrix-layout).
 
-Instead, on CDNA 3 accelerators, the three bits of the BLGP modifier are used to indicate if the three input matrices (A, B, and/or C) should have their values negated before being sent to the Matrix Core.
+Instead, in CDNA 3 accelerators, the three bits of the BLGP modifier are used to indicate if the three input matrices (A, B, and/or C) should have their values negated before being sent to the Matrix Core.
 Setting the lowest-order bit of BLGP will negate Src0, the values of the A matrix.
 Setting the middle bit of BLGP will negate Src1, the values of the B matrix.
 Setting the highest-order bit of BLGP will negate Src3, the values of the C matrix.
 Any of the bits may be set at the same time.
 
-The following is an example that requests the matrix layout of the matrix B for the V\_MFMA\_F64\_16X16X4_F64 instruction on CDNA 3 architecture, with the BLGP value of 6.
+The following is an example that requests the matrix layout of the matrix B for the V\_MFMA\_F64\_16X16X4\_F64 instruction in the CDNA 3 architecture, with the BLGP value of 6.
 Because the value 6 has the middle bit set, the values of the B\[\] matrix are returned with a negative sign to indicate that their values will be negated by the instruction.
 ```
 ./matrix_calculator.py --architecture cdna3 --instruction v_mfma_f64_16x16x4_f64 --matrix-layout --B-matrix --blgp 6
@@ -1142,15 +1143,15 @@ This indicates that the compression bits for this entry, if it exists in the mat
 Or they should be placed into the 6th and 7th bits, if this is the second value contained in the post-compression block.
 
 The `--cbsz` and `--abid` modifiers can also affect the output of the compression index.
-Because the VGPR that holds the compression index is 32b long, sparse instructions with 16b inputs only need 1/4 of a register (8 bits per lane) to store the compression matrix.
+Because the VGPR that holds the compression index is 32b long, sparse instructions with 16b inputs only need 1/4 of a register (8 bits per lane) to store the compression index.
 Setting `CBSZ!=0` allows setting ABID to 0, 1, 2, or 3. This allows storing different compression indices in any of the 8b segments.
 
-Similarly, sparse instructions with 8b inputs only need 1/2 of a register (16 bits per lane) to store the compression matrix.
+Similarly, sparse instructions with 8b inputs only need 1/2 of a register (16 bits per lane) to store the compression indices.
 Setting `CBSZ!=0` allows setting ABID to 0 or 2, which allows choosing the compression indices from the top or bottom half of the register.
 
-This use of CBSZ and ABID modifiers for SMFMAC instructions prevents their use for broadcasting A\[\] matrix values [as described above](#example-of-using-the-cbsz-and-abid-modifiers-to-change-the-a-matrix-layout).
+This use of CBSZ and ABID modifiers for SMFMAC instructions prevents their use for broadcasting A\[\] matrix values [in the manner described above](#example-of-using-the-cbsz-and-abid-modifiers-to-change-the-a-matrix-layout).
 
-For example, the following is the same instruction as before, looking for the compression index of the 2nd row and 31st column of V\_SMFMAC\_F32\_16X16X32\_F16 on MI300, but setting CBSZ and ABID such that we are looking the upper-most bits of the compression indices' VGPR.
+For example, the following is the same instruction as before, looking for the compression index of the 2nd row and 31st column of V\_SMFMAC\_F32\_16X16X32\_F16 in MI300, but setting CBSZ and ABID such that we are looking the upper-most bits of the compression indices' VGPR.
 
 ```
 $ ./matrix_calculator.py --architecture cdna3 --instruction v_smfmac_f32_16x16x32_f16 --get-register --I-coordinate 2 --K-coordinate 31 --compression --cbsz 1 --abid 3
@@ -1159,12 +1160,12 @@ Instruction: V_SMFMAC_F32_16X16X32_F16
 K[2][31] = v0{50}.[31:28]
 ```
 
-Examples of Setting Modifiers on AMD RDNA&trade; Architectures
--------------------------------------------------------------------------------------
+Examples of Setting Modifiers in the AMD RDNA&trade; 3 Architecture
+-------------------------------------------------------------------------------------------------------
 AMD Radeon&trade; GPUs that use the RDNA 3 architecture allow setting modifier fields that change how the matrix multiplication instructions access data out of registers.
 Examples of using these fields, `OPSEL`, and `NEG`, are shown below.
 
-### Example of Using the OPSEL Modifier to Change the C and D Matrix Storage
+### Example of Using the OPSEL Modifier to Change the C and D Matrix Storage in the AMD RDNA&trade; 3 Architecture
 Some instructions in the AMD RDNA&trade; 3 architecture allow the elements in the C\[\] and D\[\] matrices to be 16-bit values.
 The format of these matrices uses 16 bits out of each 32-bit register to store these values.
 These instructions will read only half of each C\[\] input register and write to only half of each D\[\] output register.
@@ -1176,7 +1177,7 @@ Setting `OPSEL[2]=1` will cause the WMMA instruction to read from the top half o
 This tool allows setting of this field using the `--opsel` flag for architecture and instructions that support this modifier.
 Legal values for this option are `--opsel 0`, which indicates `OPSEL[2]=0`, and `--opsel 4`, which indicates `OPSEL[2]=1`.
 
-The following is an example of the register layout for the matrix D of the V\_WMMA\_F16\_16X16X16_f16 instruction in the RDNA&trade; 3 architecture without the OPSEL modifier set:
+The following is an example of the register layout for the matrix D of the V\_WMMA\_F16\_16X16X16\_f16 instruction in the RDNA 3 architecture without the OPSEL modifier set:
 ```
 $ ./matrix_calculator.py --architecture rdna3 --instruction v_wmma_f16_16x16x16_f16 --register-layout --D-matrix
 Architecture: RDNA3
@@ -1220,7 +1221,7 @@ Instruction: V_WMMA_F16_16X16X16_F16
 
 In the above case, because `OPSEL[2]=0`, only the bottom half of each register (bits 15:0) is used.
 
-The following is an example of the register layout for the matrix D of the V\_WMMA\_F16\_16X16X16_f16 instruction in the RDNA&trade; 3 architecture without the OPSEL modifier set:
+The following is an example of the register layout for the matrix D of the V\_WMMA\_F16\_16X16X16\_f16 instruction in the RDNA 3 architecture without the OPSEL modifier set:
 ```
 $ ./matrix_calculator.py --architecture rdna3 --instruction v_wmma_f16_16x16x16_f16 --register-layout --D-matrix --opsel 4
 Architecture: RDNA3
@@ -1273,16 +1274,16 @@ For floating point WMMA instructions, setting the middle bit of NEG will negate 
 For floating point WMMA instructions, setting the highest-order bit of NEG will negate Src3, the values of the C matrix, while setting the highest-order bit of NEG_HI will take the absolute value of the C matrix entry.
 Any of the bits may be set at the same time; when `NEG[2]` and `NEG_HI[2]` are both set, the absolute value is calculated before the negation.
 
-For integer WMMA instructions, the two lower-order bits of `NEG` are used to control whether the values in the A\[] and B\[] matrices are treated as unsigned or signed integers.
+For integer WMMA instructions, the two lower-order bits of `NEG` are used to control whether the values in the A\[\] and B\[\] matrices are treated as unsigned or signed integers.
 `NEG[2]` and the entire `NEG_HI` modifier may not be used to negate the A\[] or B\[] matrices for integer WMMA instructions, and they should be set to 0.
 
 This tool allows setting the `NEG` field using the `--neg` flag for architectures and instructions that support this modifier.
 The  `--neg_hi` flag is used to set the `NEG_HI` field.
 Because these are 3-bit fields, legal values for this option are integers between 0 and 7, inclusive.
-See [the later section on instruction encodings](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-for-amd-rdna-3-architectures) for how the `NEG` field and `NEG_HI` fields interact.
-This tool does not let users manually change the NEG_HI field.
+See [the later section on instruction encodings](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-in-the-amd-rdna-3-architecture) for how the `NEG` field and `NEG_HI` fields interact.
+This tool does not let users manually change the `NEG_HI` field.
 
-The following is an example that requests the matrix layout of the matrix B for the V\_WMMA\_F32\_16X16X16_F16 instruction on RDNA 3 architecture, with the `NEG` and `NEG_HI` value of 6.
+The following is an example that requests the matrix layout of the matrix B for the V\_WMMA\_F32\_16X16X16\_F16 instruction in the RDNA 3 architecture, with the `NEG` and `NEG_HI` value of 6.
 Because the value 6 has the middle bit set, the values of the B\[\] matrix are returned with a negative sign to indicate that their values will be negated by the instruction.
 
 ```
@@ -1358,12 +1359,11 @@ Instruction: V_WMMA_F32_16X16X16_F16
 +--------+-------------+--------------+-------------+--------------+-------------+--------------+-------------+--------------+-------------+--------------+-------------+--------------+-------------+--------------+-------------+--------------+
 ```
 
-
 Details of AMD Matrix Multiplication Instruction Encodings
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 This section details the encodings used by matrix multiplication instructions in AMD accelerators.
 
-### Details of the VOP3P-MAI Matrix Multiplication Instruction Encoding for AMD CDNA&trade; 1 - CDNA 3 Architectures
+### Details of the VOP3P-MAI Matrix Multiplication Instruction Encoding in the AMD CDNA&trade; 1 - CDNA 3 Architectures
 In the CDNA 1, 2, and 3 architectures, matrix multiplications instructions contain "MFMA", or matrix fused multiply add, in their mnemonics.
 Instructions that execute matrix multiplication on 4:2 structured sparse matrices contain "SMFMAC", or sparse matrix fused multiply accumulate, in their mnemonics.
 This section details the instruction encoding and the configuration fields for these instructions.
@@ -1373,8 +1373,8 @@ VOP3P-MAI is a subset of the VOP3P (**V**ector **Op** with **3** Inputs, Doing *
 The differentiator between these spaces is the upper-most bit in the 7-bit opcode field is always 0 in traditional VOP3P, while it is always 1 in VOP3P-MAI.
 This is labelled as bit 54 in the chart below, and bit 22 in the AMD ISA guides.
 
-The reason for this nomenclature difference is because the VOP3P-MAI is a 64b opcode, where bits [63:32] are held at bytes address X, and [31:0] are at bytes address X+4.
-This 64b encoding space is how AMD's software tools, such as `roc-obj` and LLVM decode these 64b instructions.
+The reason for this nomenclature difference is because the VOP3P-MAI is a 64b opcode, where bits \[63:32\] are held at bytes address X, and \[31:0\] are at bytes address X+4.
+This 64b encoding space is how AMD's software tools, such as `llvm-objdump`, decode these 64b instructions.
 Because the software tools will display these as a 64b number, we illustrate the encoding as such in this section.
 
 If looking at these opcodes from the viewpoint of a little-endian architecture that primarily works on 4-byte values, one would swap bits 63:32 with bits 31:00.
@@ -1424,12 +1424,12 @@ The following fields are illustrated:
         * 248: 1/(2*pi)
         * 249-255: Reserved
         * 256-511: Registers 0-255
-    * Only 256 registers can be addressed by this field. The choice of ArchVGPR and AccVGPR is controlled by ACC[0], bit 27.
+    * Only 256 registers can be addressed by this field. The choice of ArchVGPR and AccVGPR is controlled by ACC\[0\], bit 27.
 * Vsrc1
     * Bits 17:9
     * Encoding for the B\[\] input matrix
     * This is a 9-bit field that uses the same encoding described above for Vsrc0
-    * Only 256 registers can be addressed by this field. The choice of ArchVGPR and AccVGPR is controlled by ACC[1], bit 28.
+    * Only 256 registers can be addressed by this field. The choice of ArchVGPR and AccVGPR is controlled by ACC\[1\], bit 28.
 * Vsrc2
     * Bits 26:18
     * Encoding for the C\[\] input matrix
@@ -1444,7 +1444,7 @@ The following fields are illustrated:
     * Configures the B-matrix Lane Group Pattern parameter
         * Described in detail in the section: [Example of Using the BLGP Modifier to Change the B Matrix Layout](#example-of-using-the-blgp-modifier-to-change-the-b-matrix-layout)
     * For FP64 instructions in the CDNA 3 architecture, this field is used to negate input matrix values.
-        * Described in detail in the section: [Using the BLGP Modifier to Negate Input Matrices on CDNA&trade; 3 Architectures](#using-the-blgp-modifier-to-negate-input-matrices-on-cdna-architectures)
+        * Described in detail in the section: [Example of Using the BLGP Modifier to Negate Input Matrices in the CDNA™ 3 Architecture](#example-of-using-the-blgp-modifier-to-negate-fp64-input-matrices-in-the-cdna-3-architecture)
 * Vdst
     * Bits 39:32
     * Encoding for the D\[\] output matrix
@@ -1461,7 +1461,7 @@ The following fields are illustrated:
 * ACC\_CD
     * Single bit that controls whether the C\[\] and D\[\] matrices use the ArchVGPR space (when set to 0) or the AccVGPR space (when set to 1)
 
-### Details of the VOP3P Matrix Multiplication Instruction Encoding for AMD RDNA&trade; 3 Architectures
+### Details of the VOP3P Matrix Multiplication Instruction Encoding in the AMD RDNA&trade; 3 Architecture
 In the RDNA 3 architecture, matrix multiplications instructions contain "WMMA", or wave matrix multiply accumulate, in their mnemonics.
 This section details the instruction encoding and the configuration fields for these instructions.
 
@@ -1469,8 +1469,8 @@ These operations are encoded in the VOP3P (**V**ector **Op** with **3** Inputs, 
 This field contains the 6-bit value `110011b` in bits 63:58, as labeled in the figure below.
 This 6-bit value is listed as bits 31:26 in the AMD ISA guides.
 
-The reason for this nomenclature difference is because the VOP3P is a 64b opcode, where bits [63:32] are held at bytes address X, and [31:0] are at bytes address X+4.
-This 64b encoding space is how AMD's software tools, such as `roc-obj` and LLVM decode these 64b instructions.
+The reason for this nomenclature difference is because the VOP3P is a 64b opcode, where bits \[63:32\] are held at bytes address X, and \[31:0\] are at bytes address X+4.
+This 64b encoding space is how AMD's software tools, such as `llvm-objdump`, decode these 64b instructions.
 Because the software tools will display these as a 64b number, we illustrate the encoding as such in this section.
 
 If looking at these opcodes from the viewpoint of a little-endian architecture that primarily works on 4-byte values, one would swap bits 63:32 with bits 31:00.
@@ -1485,13 +1485,13 @@ The following illustrates the 64b VOP3P instruction format.
 |                       |                       |                       |                       |
 |                 |        |                    |CL|OP|        |        |                       |
 | 1  1  0  0  1  1| 0  0  0|    7-bit opcode    |AM|SH|  OPSEL | NEG_HI |          Vdst         |
-|                 |        |                    |P |I0|        |        |                       |
+|                 |        |                    |P |I2|        |        |                       |
 -------------------------------------------------------------------------------------------------
 |31|30|29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|09|08|07|06|05|04|03|02|01|00|
 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 |                       |                       |                       |                       |
 |        |OPSEL|                          |                          |                          |
-|   NEG  |HI_12|           Vsrc2          |           Vsrc1          |           Vsrc0          |
+|   NEG  |HI_01|           Vsrc2          |           Vsrc1          |           Vsrc0          |
 |        |     |                          |                          |                          |
 -------------------------------------------------------------------------------------------------
 ```
@@ -1532,6 +1532,9 @@ The following fields are illustrated:
         * 256-511: Registers 0-255
 * OPSEL\_HI
     * Bits 46, 28:27
+        * Bit 46 is OPSEL_HI bit 2
+        * Bit 28 is OPSEL_HI bit 1
+        * Bit 27 is OPSEL_HI bit 0
     * Unused by WMMA instructions. Set to 0.
 * NEG
     * Bits 31:29
@@ -1572,7 +1575,7 @@ The following fields are illustrated:
     * This field does not affect floating point WMMA operations.
 
 Further Materials
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
 Further information about the MFMA and WMMA instructions, their data layout, and their capabilities can be found in AMD manuals, code repositories, and blog posts.
 This section is meant to contains a list of as many of these documents as possible.
 
@@ -1588,7 +1591,7 @@ This section is meant to contains a list of as many of these documents as possib
         * Public ISA Guide for AMD Radeon&trade; GPUs using the RNDA3 ISA
 * AMD Blog Posts
     * <https://gpuopen.com/learn/amd-lab-notes/amd-lab-notes-matrix-cores-README/>
-        * AMD lab notes on AMD Matrix Cores, which covers the use of MFMA instructions on CDNA 1 and CDNA 2 accelerators
+        * AMD lab notes about AMD Matrix Cores, which covers the use of MFMA instructions in CDNA 1 and CDNA 2 accelerators
     * <https://gpuopen.com/learn/wmma_on_rdna3/>
         * "How to accelerate AI applications on RDNA 3 using WMMA", which covers the use of WMMA instructions on RDNA3 GPUs
 * AMD Matrix Code Repositories
@@ -1600,5 +1603,5 @@ This section is meant to contains a list of as many of these documents as possib
         * This library is the recommended path for developers to access these matrix acceleration instructions in the majority of cases
 
 Trademark Attribution
--------------------------------------------------------------------------------------
-&copy; 2022-2024 Advanced Micro Devices, Inc. All rights reserved. AMD, the AMD Arrow logo, AMD CDNA, Instinct, Radeon, RDNA, and combinations thereof are trademarks of Advanced Micro Devices, Inc. in the United States and/or other jurisdictions. Other names are for informational purposes only and may be trademarks of their respective owners.
+-------------------------------------------------------------------------------------------------------
+&copy; 2022-2025 Advanced Micro Devices, Inc. All rights reserved. AMD, the AMD Arrow logo, AMD CDNA, Instinct, Radeon, RDNA, and combinations thereof are trademarks of Advanced Micro Devices, Inc. in the United States and/or other jurisdictions. Other names are for informational purposes only and may be trademarks of their respective owners.
