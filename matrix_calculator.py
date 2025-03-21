@@ -71,7 +71,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.2.4"
+VERSION = "1.2.5"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -94,6 +94,7 @@ dict_isas = {
     'mi300'            : 'cdna3',
     'mi300a'           : 'cdna3',
     'mi300x'           : 'cdna3',
+    'mi325x'           : 'cdna3',
     'aqua_vanjaram'    : 'cdna3',
     'rdna3'            : 'rdna3',
     'gfx1100'          : 'rdna3',
@@ -101,7 +102,9 @@ dict_isas = {
     'gfx1102'          : 'rdna3',
     'gfx1103'          : 'rdna3',
     'gfx1150'          : 'rdna3',
-    'gfx1151'          : 'rdna3'
+    'gfx1151'          : 'rdna3',
+    'gfx1152'          : 'rdna3',
+    'gfx1153'          : 'rdna3'
 }
 
 class MatrixNumericalType(TypedDict):

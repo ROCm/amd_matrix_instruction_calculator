@@ -85,8 +85,8 @@ Command line parameters are case sensitive, but inputs for the command-line para
 * `--architecture {arch name}` (or `-a {arch name}`): This parameter chooses which AMD architecture to use for further calculations. This must be set for every other action in the application. Legal inputs are:
     * `CDNA`, `CDNA1`, `gfx908`, `arcturus`, or `MI100`: The AMD Instinct&trade; MI100 series of accelerators
     * `CDNA2`, `gfx90a`, `aldebaran`, `MI200`, `MI210`, `MI250`, or `MI250X`: The AMD Instinct MI200 series of accelerators, including AMD Instinct MI210, AMD Instinct MI250, and AMD Instinct MI250X
-    * `CDNA3`, `gfx940`, `gfx941`, `gfx942`, `aqua_vanjaram`, `MI300`, `MI300A`, or `MI300X`: The AMD Instinct MI300 series of accelerators
-    * `RDNA3`, `gfx1100`, `gfx1101`, `gfx1102`, `gfx1103`, `gfx1150`, or `gfx1151`: The AMD Radeon&trade; RDNA&trade; 3 series of GPUs
+    * `CDNA3`, `gfx940`, `gfx941`, `gfx942`, `aqua_vanjaram`, `MI300`, `MI300A`, `MI300X`, or `MI325X`: The AMD Instinct MI300 series of accelerators
+    * `RDNA3`, `gfx1100`, `gfx1101`, `gfx1102`, `gfx1103`, `gfx1150`, `gfx1151`, `gfx1152`, `gfx1153`: The AMD Radeon&trade; RDNA&trade; 3 series of GPUs
 * `--list-instructions` (or `-L`): This parameter will print the supported matrix multiplication instructions for the chosen architecture and exit the application.
 * `--instruction {instruction mnemonic}` (or `-i {instruction mnemonic}`): This parameter chooses which instruction, from the list of legal matrix multiplication instructions in the chosen architecture, to use for the calculations in this tool.
 
