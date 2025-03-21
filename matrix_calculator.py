@@ -70,7 +70,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.2"
+VERSION = "1.2.1"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -147,11 +147,11 @@ dict_math_types: Dict[str, MatrixNumericalType] = {
         'size': 8,
         'description': 'int8 (Signed 8-bit integer)',
     },
-    'fp8': {
+    'amd_fp8': {
         'size': 8,
         'description': 'FP8 (AMD 4-bit exponent, 3-bit mantissa floating point)',
     },
-    'bf8': {
+    'amd_bf8': {
         'size': 8,
         'description': 'BF8 (AMD 5-bit exponent, 2-bit mantissa floating point)',
     },
@@ -1931,8 +1931,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x32_bf8_bf8': {
             'arch': 'cdna3',
             'opcode': 112,
-            'in_type': 'bf8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -1953,8 +1953,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x32_bf8_fp8': {
             'arch': 'cdna3',
             'opcode': 113,
-            'in_type': 'bf8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -1975,8 +1975,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x32_fp8_bf8': {
             'arch': 'cdna3',
             'opcode': 114,
-            'in_type': 'fp8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -1997,8 +1997,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_16x16x32_fp8_fp8': {
             'arch': 'cdna3',
             'opcode': 115,
-            'in_type': 'fp8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -2019,8 +2019,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x16_bf8_bf8': {
             'arch': 'cdna3',
             'opcode': 116,
-            'in_type': 'bf8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2041,8 +2041,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x16_bf8_fp8': {
             'arch': 'cdna3',
             'opcode': 117,
-            'in_type': 'bf8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2063,8 +2063,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x16_fp8_bf8': {
             'arch': 'cdna3',
             'opcode': 118,
-            'in_type': 'fp8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2085,8 +2085,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_mfma_f32_32x32x16_fp8_fp8': {
             'arch': 'cdna3',
             'opcode': 119,
-            'in_type': 'fp8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2107,8 +2107,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_16x16x64_bf8_bf8': {
             'arch': 'cdna3',
             'opcode': 120,
-            'in_type': 'bf8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -2129,8 +2129,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_16x16x64_bf8_fp8': {
             'arch': 'cdna3',
             'opcode': 121,
-            'in_type': 'bf8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -2151,8 +2151,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_16x16x64_fp8_bf8': {
             'arch': 'cdna3',
             'opcode': 122,
-            'in_type': 'fp8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -2173,8 +2173,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_16x16x64_fp8_fp8': {
             'arch': 'cdna3',
             'opcode': 123,
-            'in_type': 'fp8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 16,
             'n': 16,
@@ -2195,8 +2195,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_32x32x32_bf8_bf8': {
             'arch': 'cdna3',
             'opcode': 124,
-            'in_type': 'bf8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2217,8 +2217,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_32x32x32_bf8_fp8': {
             'arch': 'cdna3',
             'opcode': 125,
-            'in_type': 'bf8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_bf8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2239,8 +2239,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_32x32x32_fp8_bf8': {
             'arch': 'cdna3',
             'opcode': 126,
-            'in_type': 'fp8',
-            'in_type_src1': 'bf8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_bf8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2261,8 +2261,8 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
         'v_smfmac_f32_32x32x32_fp8_fp8': {
             'arch': 'cdna3',
             'opcode': 127,
-            'in_type': 'fp8',
-            'in_type_src1': 'fp8',
+            'in_type': 'amd_fp8',
+            'in_type_src1': 'amd_fp8',
             'out_type': 'fp32',
             'm': 32,
             'n': 32,
@@ -2904,10 +2904,13 @@ def parse_and_run() -> int:
             return -2
     # On RDNA3 architectures, the NEG field is used for two things: for FP operations, its
     # three bits are used to negate the values of the A, B, and C matrices, respectively.
-    # Fo FP, NEG[0] and NEG[1] affect the low 16 bits of each A and B register, respectively.
+    # For FP, NEG[0] and NEG[1] affect the low 16 bits of each A and B register, respectively.
     # To fully negate an input matrix, the NEG_HI field in the instruction should also be set.
     # For floating-point inputs, NEG_HI[0] and NEG_HI[1] negate the high 16 bits of each
     # A and B register, respectively.
+    # For floating-point outputs, NEG[2] causes the instruction to subtract (instead of add)
+    # the C matrix, while NEG_HI[2] causes the addition/subtraction of the absolute value of
+    # the C matrix.
     # For integer instructions, the first two bits are used to set the A and B matrices to
     # signed/unsigned respectively and the third bit must-be-zero. NEG_HI must be 0 for integers.
     if (int(args.neg) > 0 or int(args.neg_hi) > 0):
@@ -2929,13 +2932,25 @@ def parse_and_run() -> int:
                 print("When using the D matrix, the NEG modifier may ", end="", file=sys.stderr)
                 print("only be used when asking for the --output-calculation.", file=sys.stderr)
                 return -2
-        if int(args.neg) > 7:
-            print("The NEG modifier may only contain values between ", end="", file=sys.stderr)
-            print("0 - 7, inclusive.", file=sys.stderr)
+        max_neg_val = 7
+        max_neg_hi_val = 7
+        if inst_info['integer']:
+            max_neg_val = 3
+            max_neg_hi_val = 0
+        if int(args.neg) > max_neg_val:
+            print(f"For the instruction {inst_to_use.upper()} in the ", end="", file=sys.stderr)
+            print(f"{arch_to_use.upper()} architecture, ", end="", file=sys.stderr)
+            print("the NEG modifier may only contain values between ", end="", file=sys.stderr)
+            print(f"0 - {max_neg_val}, inclusive.", file=sys.stderr)
             return -2
-        if int(args.neg_hi) > 7:
-            print("The NEG_HI modifier may only contain values between ", end="", file=sys.stderr)
-            print("0 - 7, inclusive.", file=sys.stderr)
+        if int(args.neg_hi) > max_neg_hi_val:
+            print(f"For the instruction {inst_to_use.upper()} in the ", end="", file=sys.stderr)
+            print(f"{arch_to_use.upper()} architecture, ", end="", file=sys.stderr)
+            print("the NEG_HI modifier may only contain values ", end="", file=sys.stderr)
+            if max_neg_hi_val == 0:
+                print("of 0.", file=sys.stderr)
+            else:
+                print(f"between 0 - {max_neg_hi_val}, inclusive.", file=sys.stderr)
             return -2
 
     negate = {'a': False, 'a_lo': False, 'a_hi': False, 'b': False, 'b_lo': False, 'b_hi': False,
@@ -3337,7 +3352,7 @@ class InstCalc(metaclass=ABCMeta):
 
     @abstractmethod
     def _find_matching_b_lane(self, a_lane: int, b_lanes: List[int]) -> int:
-        """ Finds the lane in a list of B matrix lanes that match the A matirx lane.
+        """ Finds the lane in a list of B matrix lanes that match the A matrix lane.
 
         This is an abstract method, and should be filled in by any child class to
         actually calculate this data for the target architecture.
@@ -3347,7 +3362,7 @@ class InstCalc(metaclass=ABCMeta):
         the matrix. If a value was stored in both lanes 0 and lane 16, when printing
         out "lane 0 of A is multiplied by lane X of B", this function will do that
         matching. It takes as an argument a list of lanes from B, and the requested
-        lane of A. Returned the lane of B that is multiplied by the reuqested ane of A.
+        lane of A. Returns the lane of B that is multiplied by the requested lane of A.
 
         Args:
             a_lane: integer for the lane of A that we want to match
@@ -4715,14 +4730,14 @@ class InstCalcGfx9(InstCalc):
             further calculations.
     """
     def _find_matching_b_lane(self, a_lane: int, b_lanes: List[int]) -> int:
-        """ Finds the lane in a list of B matrix lanes that match the A matirx lane.
+        """ Finds the lane in a list of B matrix lanes that match the A matrix lane.
 
         In some architectures, matrix values can exist simultaneously in multiple
         lanes. Or, more specifically, multiple lanes must store the same value from
         the matrix. If a value was stored in both lanes 0 and lane 16, when printing
         out "lane 0 of A is multiplied by lane X of B", this function will do that
         matching. It takes as an argument a list of lanes from B, and the requested
-        lane of A. Returned the lane of B that is multiplied by the reuqested ane of A.
+        lane of A. Returns the lane of B that is multiplied by the requested lane of A.
 
         In gfx9, B matrix only has a single lane per entry, like A matrix.
         As such, just return the first lane of B.
@@ -5496,14 +5511,14 @@ class InstCalcGfx11(InstCalc):
     """
 
     def _find_matching_b_lane(self, a_lane: int, b_lanes: List[int]) -> int:
-        """ Finds the lane in a list of B matrix lanes that match the A matirx lane.
+        """ Finds the lane in a list of B matrix lanes that match the A matrix lane.
 
         In some architectures, matrix values can exist simultaneously in multiple
         lanes. Or, more specifically, multiple lanes must store the same value from
         the matrix. If a value was stored in both lanes 0 and lane 16, when printing
         out "lane 0 of A is multiplied by lane X of B", this function will do that
         matching. It takes as an argument a list of lanes from B, and the requested
-        lane of A. Returned the lane of B that is multiplied by the reuqested ane of A.
+        lane of A. Returns the lane of B that is multiplied by the requested lane of A.
 
         Args:
             a_lane: integer for the lane of A that we want to match
