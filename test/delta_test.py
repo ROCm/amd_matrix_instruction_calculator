@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 #
-# Copyright (c) 2022-2024 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -53,7 +53,7 @@ from os import path
 from re import findall, search, MULTILINE
 from joblib import Parallel, delayed
 
-VERSION = "1.1"
+VERSION = "1.1.1"
 
 class TestRunner:
     """ Class to run the application under test with a chosen command line, redirect the output
@@ -63,8 +63,15 @@ class TestRunner:
     def __init__(self, test_app, output_file, expected_success=True):
         self.test_app = test_app
         self.path = str(output_file)
-        self.output_file = open(output_file, "w+", encoding="utf-8")
+        self.output_file = None
         self.expected_success = expected_success
+
+    def __enter__(self):
+        self.output_file = open(self.path, "w+", encoding="utf-8")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.output_file.close()
 
     def run(self, args_string):
         """ Function used to actually run the test and compare outputs """
@@ -78,19 +85,20 @@ class TestRunner:
         print(str(' '.join(run_str)), file=self.output_file, flush=True)
         args_list = list(filter(None, args_string.strip().split(' ')))
         to_run = [str(self.test_app),] + args_list
-        ret_val = Popen(to_run, stdout=self.output_file, stderr=self.output_file).wait()
-        if (self.expected_success and ret_val != 0):
-            print(f"ERROR: Expected this to succeed: {' '.join(run_str)}")
-            print(f"       But it failed with a return value of {ret_val}")
-            print(f"       Command array: {to_run}")
-            print(f"       Output file at {self.path}")
-            to_return = False
-        elif (not self.expected_success and ret_val == 0):
-            print(f"ERROR: Expected this to fail: {' '.join(run_str)}")
-            print(f"       But it succeeded with a return value of {ret_val}")
-            print(f"       Command array: {to_run}")
-            print(f"       Output file at {self.path}")
-            to_return = False
+        with Popen(to_run, stdout=self.output_file, stderr=self.output_file) as p:
+            ret_val = p.wait()
+            if (self.expected_success and ret_val != 0):
+                print(f"ERROR: Expected this to succeed: {' '.join(run_str)}")
+                print(f"       But it failed with a return value of {ret_val}")
+                print(f"       Command array: {to_run}")
+                print(f"       Output file at {self.path}")
+                to_return = False
+            elif (not self.expected_success and ret_val == 0):
+                print(f"ERROR: Expected this to fail: {' '.join(run_str)}")
+                print(f"       But it succeeded with a return value of {ret_val}")
+                print(f"       Command array: {to_run}")
+                print(f"       Output file at {self.path}")
+                to_return = False
         return to_return
 
     def run_internal(self, args_string):
@@ -107,14 +115,14 @@ class TestRunner:
         run_str = list(filter(None, run_str.strip().split(' ')))
         args_list = list(filter(None, args_string.strip().split(' ')))
         to_run = [str(self.test_app),] + args_list
-        proc = Popen(to_run, stdout=PIPE, universal_newlines=True)
-        ret_str = proc.communicate()[0]
-        if proc.returncode != 0:
-            print(f"ERROR: Expected this internal command to succeed: {' '.join(run_str)}")
-            print(f"       But it failed with a return value of {proc.returncode}")
-            print(f"       Command array: {to_run}")
-            print(f"       Output file at {self.path}")
-            sys.exit(-1)
+        with Popen(to_run, stdout=PIPE, universal_newlines=True) as proc:
+            ret_str = proc.communicate()[0]
+            if proc.returncode != 0:
+                print(f"ERROR: Expected this internal command to succeed: {' '.join(run_str)}")
+                print(f"       But it failed with a return value of {proc.returncode}")
+                print(f"       Command array: {to_run}")
+                print(f"       Output file at {self.path}")
+                sys.exit(-1)
         return str(ret_str)
 
 def run_error_tests(test_app, temp_dir):
@@ -123,68 +131,68 @@ def run_error_tests(test_app, temp_dir):
         failure.
     """
     temp_file = mkstemp(suffix='.txt', prefix='error_tests_', dir=temp_dir, text=True)
-    r = TestRunner(test_app, temp_file[1], False)
-    r.run("")
-    r.run("-a")
-    r.run("-a bad_arch")
-    r.run("-a cdna1 -i")
-    r.run("-a cdna1 -i bad_inst")
-    for arg in ("I-coordinate", "J-coordinate", "K-coordinate", "block", "register", "lane",
-                "cbsz", "abid", "blgp", "wavefront", "neg"):
-        r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg}")
-        r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} 0xdeadbeef")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register --matrix-entry")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register --matrix-entry --register-layout "\
-          "--matrix-layout")
-    for arg in ("get-register", "matrix-entry", "register-layout", "matrix-layout"):
-        r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} -A -B")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -C --output-calculation")
-    r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout -A --cbsz 2")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --cbsz 2")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 4")
-    r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -A --cbsz 4")
-    r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout --abid 1")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --abid 1")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 0 --abid 1")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 1 --abid 3")
-    r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -A --cbsz 1 --abid 4")
-    r.run("-a cdna3 -i v_smfmac_i32_16x16x64_i8 --register-layout -A --cbsz 1 --abid 4")
-    r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout -B --blgp 1")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --blgp 1")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --blgp 8")
-    r.run("-a cdna3 -i v_mfma_f64_4x4x4_4b_f64 --register-layout -D --blgp 1")
-    r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -C")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -k")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A -w 32")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A -w 33")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --opsel 1")
-    r.run("-a rdna3 -i v_wmma_f32_16x16x16_f16 --register-layout -A -w 33")
-    r.run("-a rdna3 -i v_wmma_f32_16x16x16_f16 --register-layout -D --opsel 4")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -B --opsel 4")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --neg 1")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -A --neg 42")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --neg_hi 1")
-    r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -A --neg_hi 42")
-    r.run("-a rdna3 -i v_wmma_i32_16x16x16_iu8 -A --register-layout --neg 7")
-    r.run("-a rdna3 -i v_wmma_i32_16x16x16_iu4 -A --register-layout --neg_hi 7")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg 1")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg_hi 1")
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --csv --markdown")
+    with TestRunner(test_app, temp_file[1], False) as r:
+        r.run("")
+        r.run("-a")
+        r.run("-a bad_arch")
+        r.run("-a cdna1 -i")
+        r.run("-a cdna1 -i bad_inst")
+        for arg in ("I-coordinate", "J-coordinate", "K-coordinate", "block", "register", "lane",
+                    "cbsz", "abid", "blgp", "wavefront", "neg"):
+            r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg}")
+            r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} 0xdeadbeef")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register --matrix-entry")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register --matrix-entry --register-layout "\
+              "--matrix-layout")
+        for arg in ("get-register", "matrix-entry", "register-layout", "matrix-layout"):
+            r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} -A -B")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -C --output-calculation")
+        r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout -A --cbsz 2")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --cbsz 2")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 4")
+        r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -A --cbsz 4")
+        r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout --abid 1")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --abid 1")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 0 --abid 1")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --cbsz 1 --abid 3")
+        r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -A --cbsz 1 --abid 4")
+        r.run("-a cdna3 -i v_smfmac_i32_16x16x64_i8 --register-layout -A --cbsz 1 --abid 4")
+        r.run("-a cdna3 -i v_mfma_f32_16x16x8_xf32 --register-layout -B --blgp 1")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --blgp 1")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -B --blgp 8")
+        r.run("-a cdna3 -i v_mfma_f64_4x4x4_4b_f64 --register-layout -D --blgp 1")
+        r.run("-a cdna3 -i v_smfmac_f32_16x16x32_f16 --register-layout -C")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -k")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A -w 32")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A -w 33")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --opsel 1")
+        r.run("-a rdna3 -i v_wmma_f32_16x16x16_f16 --register-layout -A -w 33")
+        r.run("-a rdna3 -i v_wmma_f32_16x16x16_f16 --register-layout -D --opsel 4")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -B --opsel 4")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --neg 1")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -A --neg 42")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --neg_hi 1")
+        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -A --neg_hi 42")
+        r.run("-a rdna3 -i v_wmma_i32_16x16x16_iu8 -A --register-layout --neg 7")
+        r.run("-a rdna3 -i v_wmma_i32_16x16x16_iu4 -A --register-layout --neg_hi 7")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg 1")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg_hi 1")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --csv --markdown")
 
-    # Test bad coordinates for single register
-    for coord in ("I-coordinate", "J-coordinate", "K-coordinate", "block"):
-        r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register -A --{coord} 256")
+        # Test bad coordinates for single register
+        for coord in ("I-coordinate", "J-coordinate", "K-coordinate", "block"):
+            r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register -A --{coord} 256")
 
-    # Test bad register/lanes for matrix-entry
-    for arg in ("register", "lane"):
-        r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --matrix-entry -A --{arg} 256")
+        # Test bad register/lanes for matrix-entry
+        for arg in ("register", "lane"):
+            r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --matrix-entry -A --{arg} 256")
 
-    r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --matrix-entry -B --register 0 --lane 0 --blgp 2")
+        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --matrix-entry -B --register 0 --lane 0 --blgp 2")
     return temp_file
 
 def run_good_help_and_version(test_app, temp_dir):
@@ -192,11 +200,11 @@ def run_good_help_and_version(test_app, temp_dir):
         All of these tests should succeed.
     """
     temp_file = mkstemp(suffix='.txt', prefix='help_ver_', dir=temp_dir, text=True)
-    r = TestRunner(test_app, temp_file[1])
-    r.run("-h")
-    r.run("--help")
-    r.run("-v")
-    r.run("--version")
+    with TestRunner(test_app, temp_file[1]) as r:
+        r.run("-h")
+        r.run("--help")
+        r.run("-v")
+        r.run("--version")
     return temp_file
 
 def get_architectures(r):
@@ -232,11 +240,11 @@ def run_instruction_list(test_app, temp_dir):
         output to the calling function.
     """
     temp_file = mkstemp(suffix='.txt', prefix='inst_list_', dir=temp_dir, text=True)
-    r = TestRunner(test_app, temp_file[1])
-    for arch in get_architectures(r):
-        r.run(f"--architecture {arch} --list-instructions")
-    for arch in get_alt_architectures(r):
-        r.run(f"-a {arch} -L")
+    with TestRunner(test_app, temp_file[1]) as r:
+        for arch in get_architectures(r):
+            r.run(f"--architecture {arch} --list-instructions")
+        for arch in get_alt_architectures(r):
+            r.run(f"-a {arch} -L")
     return temp_file
 
 def get_instructions(r, arch):
@@ -257,15 +265,15 @@ def run_detailed_instructions(test_app, temp_dir):
         output to the calling function.
     """
     temp_file = mkstemp(suffix='.txt', prefix='inst_list_', dir=temp_dir, text=True)
-    r = TestRunner(test_app, temp_file[1])
-    num_tests = 0
-    for arch in get_architectures(r):
-        for inst in get_instructions(r, arch):
-            if num_tests % 2 == 0:
-                r.run(f"--architecture {arch} --instruction {inst} --detail-instruction")
-            else:
-                r.run(f"-a {arch} -i {inst} -d")
-            num_tests += 1
+    with TestRunner(test_app, temp_file[1]) as r:
+        num_tests = 0
+        for arch in get_architectures(r):
+            for inst in get_instructions(r, arch):
+                if num_tests % 2 == 0:
+                    r.run(f"--architecture {arch} --instruction {inst} --detail-instruction")
+                else:
+                    r.run(f"-a {arch} -i {inst} -d")
+                num_tests += 1
     return temp_file
 
 def get_num(r, arch, inst, find_this, which_to_check=0):
@@ -311,7 +319,7 @@ def get_supports(r, arch, inst, find_this):
     outp = r.run_internal(f'--architecture {arch} --instruction {inst} -d')
     found_lines = findall(fr"{find_this}.+\n", outp)
     if len(found_lines) > 0:
-        to_ret = (found_lines[0].split(": ")[1].strip() == 'True')
+        to_ret = found_lines[0].split(": ")[1].strip() == 'True'
     else:
         to_ret = False
     return bool(to_ret)
@@ -451,7 +459,7 @@ def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, t
         for lane in lanes_to_use:
             runner.run(f"{test_string} -r {reg} -l {lane}")
 
-def run_parallel_matrix_test(test_app, test_name, arch, inst, temp_file_name):
+def run_parallel_matrix_test_helper(test_name, arch, inst, r):
     """ Function that will execute a test on all of the options available for  matrix and
         test type.
         Available options for the test name, which is the string name of the test to run,
@@ -460,13 +468,10 @@ def run_parallel_matrix_test(test_app, test_name, arch, inst, temp_file_name):
           - matrix-layout
           - get-register
           - matrix-entry
-        The final three arguments are the string of the architecture to pass to the tool,
-        the name of the instruction to pass to the tool, and a filename where the output
-        of this test should be stored.
+        The next two arguments are the string of the architecture to pass to the tool
+        and the name of the instruction to pass to the tool.
+        The final argument is the TestRunner object
     """
-    # Open tester which will save out all our test output to the desired file
-    r = TestRunner(test_app, temp_file_name)
-
     # Get parameters we may need for the variety of tests we want to run
     M = get_num(r, arch, inst, "M")
     N = get_num(r, arch, inst, "N")
@@ -586,6 +591,23 @@ def run_parallel_matrix_test(test_app, test_name, arch, inst, temp_file_name):
                             sys.exit(-1)
                         num_done += 1
 
+def run_parallel_matrix_test(test_app, test_name, arch, inst, temp_file_name):
+    """ Function that will execute a test on all of the options available for  matrix and
+        test type.
+        Available options for the test name, which is the string name of the test to run,
+        are the same as the main tool:
+          - register-layout
+          - matrix-layout
+          - get-register
+          - matrix-entry
+        The final three arguments are the string of the architecture to pass to the tool,
+        the name of the instruction to pass to the tool, and a filename where the output
+        of this test should be stored.
+    """
+    # Open tester which will save out all our test output to the desired file
+    with TestRunner(test_app, temp_file_name) as r:
+        run_parallel_matrix_test_helper(test_name, arch, inst, r)
+
 def run_matrix_tests(test_app, temp_dir, test_name, num_jobs):
     """ Function that will launch off parallel worker threads in order to execute one of the
         four matrix tests performed by the AMD Matrix Instruction Calculator.
@@ -608,15 +630,15 @@ def run_matrix_tests(test_app, temp_dir, test_name, num_jobs):
     arch_inst_groups = []
     temp_files = []
     dummy_temp = mkstemp(suffix='.txt', prefix='dummy_', dir=temp_dir, text=True)
-    r = TestRunner(test_app, dummy_temp[1])
-    for arch in get_architectures(r):
-        for inst in get_instructions(r, arch):
-            temp_file = mkstemp(suffix='.txt', prefix='inst_list_', dir=temp_dir, text=True)
-            arch_inst_groups.append((arch, inst, temp_file[1]))
-            temp_files.append(temp_file)
-    task = (delayed(run_parallel_matrix_test)(test_app, test_name, arch, inst, temp_file)
-            for arch, inst, temp_file in arch_inst_groups)
-    Parallel(n_jobs=num_jobs, backend="threading")(task)
+    with TestRunner(test_app, dummy_temp[1]) as r:
+        for arch in get_architectures(r):
+            for inst in get_instructions(r, arch):
+                temp_file = mkstemp(suffix='.txt', prefix='inst_list_', dir=temp_dir, text=True)
+                arch_inst_groups.append((arch, inst, temp_file[1]))
+                temp_files.append(temp_file)
+        task = (delayed(run_parallel_matrix_test)(test_app, test_name, arch, inst, temp_file)
+                for arch, inst, temp_file in arch_inst_groups)
+        Parallel(n_jobs=num_jobs, backend="threading")(task)
     return temp_files
 
 def parse_and_run():
@@ -679,28 +701,26 @@ def parse_and_run():
         print(f"ERROR: Cannot find tool to test at {test_app_location}")
         sys.exit(-1)
 
-    temp_dir = TemporaryDirectory()
-
-    # files to concatenate at the end of the run
-    files = []
-    files.append(run_error_tests(test_script_path, temp_dir.name))
-    files.append(run_good_help_and_version(test_script_path, temp_dir.name))
-    files.append(run_instruction_list(test_script_path, temp_dir.name))
-    files.append(run_detailed_instructions(test_script_path, temp_dir.name))
-    _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir.name,
-                                                   "register-layout", cores)]
-    _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir.name,
-                                                   "matrix-layout", cores)]
-    _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir.name,
-                                                   "get-register", cores)]
-    _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir.name,
-                                                   "matrix-entry", cores)]
-
-    # Concatenate output files together
-    with open(output_file_path, 'w+', encoding="utf-8") as fout:
-        for in_file in files:
-            copyfileobj(open(in_file[1], "r", encoding="utf-8"), fout)
-        fout.close()
+    with TemporaryDirectory() as temp_dir:
+        # files to concatenate at the end of the run
+        files = []
+        files.append(run_error_tests(test_script_path, temp_dir))
+        files.append(run_good_help_and_version(test_script_path, temp_dir))
+        files.append(run_instruction_list(test_script_path, temp_dir))
+        files.append(run_detailed_instructions(test_script_path, temp_dir))
+        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
+                                                       "register-layout", cores)]
+        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
+                                                       "matrix-layout", cores)]
+        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
+                                                       "get-register", cores)]
+        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
+                                                       "matrix-entry", cores)]
+        # Concatenate output files together
+        with open(output_file_path, 'w+', encoding="utf-8") as fout:
+            for in_file in files:
+                with open(in_file[1], "r", encoding="utf-8") as fin:
+                    copyfileobj(fin, fout)
 
     print("Tests completed.")
 
