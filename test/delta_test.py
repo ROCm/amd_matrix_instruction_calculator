@@ -170,9 +170,6 @@ def run_error_tests(test_app, temp_dir):
         r.run("-a rdna3 -i v_wmma_f32_16x16x16_f16 --register-layout -A -w 33")
         r.run("-a rdna3 -i v_wmma_f32_16x16x16_f16 --register-layout -D --opsel 4")
         r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
-        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
-        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
-        r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --opsel 3")
         r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -B --opsel 4")
         r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -D --neg 1")
         r.run("-a rdna3 -i v_wmma_f16_16x16x16_f16 --register-layout -A --neg 42")
@@ -183,6 +180,11 @@ def run_error_tests(test_app, temp_dir):
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg 1")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg_hi 1")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --csv --markdown")
+        r.run("-a rdna4 -i v_wmma_f32_16x16x16_f16 --register-layout -A -opsel 1")
+        r.run("-a rdna4 -i v_swmmac_f32_16x16x32_f16 --register-layout -A -opsel 1")
+        r.run("-a rdna4 -i v_swmmac_f32_16x16x32_f16 --register-layout -k -opsel 7")
+        r.run("-a rdna4 -i v_wmma_f32_16x16x16_fp8_fp8 --register-layout -A --neg 1")
+        r.run("-a rdna4 -i v_wmma_f32_16x16x16_fp8_fp8 --register-layout -A --neg_hi 1")
 
         # Test bad coordinates for single register
         for coord in ("I-coordinate", "J-coordinate", "K-coordinate", "block"):
@@ -191,6 +193,11 @@ def run_error_tests(test_app, temp_dir):
         # Test bad register/lanes for matrix-entry
         for arg in ("register", "lane"):
             r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --matrix-entry -A --{arg} 256")
+
+        # Test for a bad lane usage for some instructions in RDNA4 that, when in wave64,
+        # do not allow lanes above 31
+        r.run("-a rdna4 -i v_swmmac_i32_16x16x32_iu4 -k --matrix-entry -w 64 -l 63")
+        r.run("-a rdna4 -i v_wmma_i32_16x16x16_iu4 -A --matrix-entry -w 64 -l 40")
 
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --matrix-entry -B --register 0 --lane 0 --blgp 2")
     return temp_file
@@ -326,18 +333,26 @@ def get_supports(r, arch, inst, find_this):
 
 def get_supported_wave_sizes(arch):
     """ Return a tuple of the supported wavefront sizes on the target architecture. """
-    if arch.upper() == "RDNA3":
+    if arch.upper() in ("RDNA3", "RDNA4"):
         ret_this = (32, 64)
     else:
         ret_this = (64,)
     return ret_this
+
+def get_max_lane_num(arch, inst):
+    """ Returns the maximum lane number in a wavefront on the target architecture. """
+    max_lane_num = max(get_supported_wave_sizes(arch)) - 1
+    if (arch.upper() == "RDNA4" and (inst.upper() == "V_SWMMAC_I32_16X16X32_IU4" or
+                                    inst.upper() == "V_WMMA_I32_16X16X16_IU4")):
+        max_lane_num = 31
+    return max_lane_num
 
 def get_in_bits(r, arch, inst):
     """ For a particular architecture and instruction, return the number of bits required
         for the input entries. Uses the detailed instruction print-out from the tool to
         query this info.
     """
-    outp = r.run_internal(f'--architecture {arch} --instruction {inst} -d')
+    outp = r.run_internal(f'--architecture {arch} --instruction {inst} --detail-instruction')
     found_lines = findall(r"Instruction:.+\n", outp)
     to_query = found_lines[0].split(": ")
     is_64 = bool(search(r"64\n", to_query[1]))
@@ -345,6 +360,7 @@ def get_in_bits(r, arch, inst):
     is_16 = bool(search(r"16\n", to_query[1]))
     is_odd_16 = bool(search(r"16_1k\n", to_query[1]))
     is_8 = bool(search(r"8\n", to_query[1]))
+    is_4 = bool(search(r"4\n", to_query[1]))
     if is_64:
         to_ret = int(64)
     elif is_32:
@@ -353,6 +369,8 @@ def get_in_bits(r, arch, inst):
         to_ret = int(16)
     elif is_8:
         to_ret = int(8)
+    elif is_4:
+        to_ret = int(4)
     else:
         print(f"ERROR: Unknown size for instruction {to_query[1]}")
         sys.exit(-1)
@@ -407,7 +425,8 @@ def run_get_register(runner, matrix, M, N, K, B, test_string):
                 x = f"{test_string} {row_letter} {row} {col_letter} {col} -b {block} {out_calc}"
                 runner.run(x)
 
-def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, test_string):
+def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, max_lane_num,
+                     test_string):
     """ Runs the --matrix-entry test over a series of registers and lanes on a particular matrix.
         The test_string is used to pass in most of the line that will run, so it should contain
         the architecture and instruction at a minimum. However, this test will take the A, B, and
@@ -452,11 +471,17 @@ def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, t
     else:
         lanes_to_use = (0, 7, 15, 16, 27, 31)
 
+    # Strip out any lanes that are greater than the max available
+    lanes_to_use_list = []
+    for lane in lanes_to_use:
+        if lane <= max_lane_num:
+            lanes_to_use_list.append(lane)
+
     for reg in regs_to_use:
         # Test only 6 lanes instead of 64, to reduce the amount of test time taken.
         # Test the first and last lanes, some prime-number lanes, and one on the edge
         # of 16. This should hopefully catch many possible erroneous situtations.
-        for lane in lanes_to_use:
+        for lane in lanes_to_use_list:
             runner.run(f"{test_string} -r {reg} -l {lane}")
 
 def run_parallel_matrix_test_helper(test_name, arch, inst, r):
@@ -493,7 +518,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
         max_neg = 7
     else:
         max_neg = 0
-    is_sparse = bool(search("smfmac", inst))
+    is_sparse = bool(search(r"smfmac|swmmac", inst))
 
     matrices = ('A', 'B', 'D')
     if is_sparse:
@@ -502,6 +527,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
         matrices += ('C',)
 
     wave_sizes = get_supported_wave_sizes(arch)
+    max_lane_num = get_max_lane_num(arch, inst)
 
     num_done = 0
 
@@ -511,9 +537,16 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
         cd_regs = get_matrix_regs(r, arch, inst, wave, "D")
         for matrix in matrices:
             if matrix in ('A', 'k'):
-                if matrix == 'k':
+                if matrix == 'k' and get_supports(r, arch, inst, "CBSZ"):
                     max_cbsz = 1
                     max_neg = 0
+                max_k_opsel = 0
+                if matrix == 'k' and get_supports(r, arch, inst, "OPSEL "):
+                    max_k_opsel = 1
+                    # Fix for 64-wide sparse instruction and wave32 on gfx12 only
+                    # supporting an opsel of 0
+                    if inst.lower() == "v_swmmac_i32_16x16x64_iu4" and wave == 32:
+                        max_k_opsel = 0
                 for neg in range(max_neg+1):
                     for cbsz in range(max_cbsz+1):
                         if (is_sparse and cbsz != 0):
@@ -524,26 +557,27 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                         else:
                             max_abid = int(math.pow(2, int(cbsz)) - 1)
                         for abid in range(max_abid+1):
-                            test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} "
-                            test_string += f"--cbsz {cbsz} --abid {abid} --neg {neg} "
-                            test_string += f"--neg_hi {neg} -w {wave} "
-                            if test_name in ("register-layout", "matrix-layout"):
-                                if num_done % 3 == 1:
-                                    test_string += "--csv"
-                                elif num_done % 3 == 2:
-                                    test_string += "--markdown"
-                                if num_done % 2 == 1:
-                                    test_string += " --transpose"
-                                r.run(test_string)
-                            elif test_name == "get-register":
-                                run_get_register(r, matrix, M, N, K, B, test_string)
-                            elif test_name == "matrix-entry":
-                                run_matrix_entry(r, matrix, a_regs, b_regs, cd_regs, wave, 0,
-                                                 test_string)
-                            else:
-                                print(f"Unknown test name {test_name}")
-                                sys.exit(-1)
-                            num_done += 1
+                            for opsel in range(max_k_opsel+1):
+                                test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} "
+                                test_string += f"--cbsz {cbsz} --abid {abid} --neg {neg} "
+                                test_string += f"--neg_hi {neg} --opsel {opsel} -w {wave} "
+                                if test_name in ("register-layout", "matrix-layout"):
+                                    if num_done % 3 == 1:
+                                        test_string += "--csv"
+                                    elif num_done % 3 == 2:
+                                        test_string += "--markdown"
+                                    if num_done % 2 == 1:
+                                        test_string += " --transpose"
+                                    r.run(test_string)
+                                elif test_name == "get-register":
+                                    run_get_register(r, matrix, M, N, K, B, test_string)
+                                elif test_name == "matrix-entry":
+                                    run_matrix_entry(r, matrix, a_regs, b_regs, cd_regs, wave, 0,
+                                                     max_lane_num, test_string)
+                                else:
+                                    print(f"Unknown test name {test_name}")
+                                    sys.exit(-1)
+                                num_done += 1
             elif matrix == 'B':
                 for neg in range(max_neg+1):
                     for blgp in range(max_blgp+1):
@@ -561,7 +595,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                             run_get_register(r, matrix, M, N, K, B, test_string)
                         elif test_name == "matrix-entry":
                             run_matrix_entry(r, matrix, a_regs, b_regs, cd_regs, wave, blgp,
-                                             test_string)
+                                             max_lane_num, test_string)
                         else:
                             print(f"Unknown test name {test_name}")
                             sys.exit(-1)
@@ -585,7 +619,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                             run_get_register(r, matrix, M, N, K, B, test_string)
                         elif test_name == "matrix-entry":
                             run_matrix_entry(r, matrix, a_regs, b_regs, cd_regs, wave, 0,
-                                             test_string)
+                                             max_lane_num, test_string)
                         else:
                             print(f"Unknown test name {test_name}")
                             sys.exit(-1)

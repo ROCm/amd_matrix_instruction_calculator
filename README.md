@@ -6,7 +6,7 @@ This tool allows users to generate instruction-level information such as computa
 It also allows users to generate mappings between matrix element and hardware registers.
 
 This tool supports the Matrix Fused-Multiply Add (MFMA) and Sparse Matrix Fused Multiply Accumulate (SMFMAC) instructions that are the ISA-level interface to the Matrix Cores within the AMD Instinct MI100, MI200, and MI300 series processors.
-It also supports the Wave Matrix Multiply Accumulate (WMMA) instructions that are the ISA-level interface to the AI Accelerators within the AMD Radeon RDNA&trade; 3 processors.
+It also supports the Wave Matrix Multiply Accumulate (WMMA) and Sparse Wave Matrix Multiply Accumulate (SWMMAC) instructions that are the ISA-level interface to the AI Accelerators within the AMD Radeon RDNA&trade; 3 and RDNA 4 processors.
 
 This tool offers five options for each matrix multiplication instruction:
 * Print general information about the instruction, such as its number of registers, computational throughput, and execution options (`--detail-instruction`).
@@ -15,7 +15,7 @@ This tool offers five options for each matrix multiplication instruction:
 * Print the register and lane combinations for an entire A\[\], B\[\], C\[\], or D\[\] matrix (`--register-layout`)
 * Print the A\[\], B\[\], C\[\], or D\[\] matrix entries for all the instructions' registers and lanes (`--matrix-layout`)
 
-The sparse matrix multiplication instructions included in the AMD Instinct MI300 accelerators also have a K\[\] matrix, which contains the compression information for the A\[\] matrix.
+The sparse matrix multiplication instructions included in the AMD CDNA3- and RDNA4-based accelerators also have a K\[\] matrix, which contains the compression information for the A\[\] matrix.
 This K\[\] matrix takes the place of the C\[\] input data matrix.
 This tool can also print the register and lane mappings of the K\[\] matrix using the last four options (`--get-register`, `--matrix-entry`, `--register-layout`, `--matrix-layout`), but only for instructions that are sparse.
 
@@ -44,17 +44,18 @@ Table of Contents
         * [Example of Querying the Source Matrix Entries for D Matrix Outputs](#example-of-querying-the-source-matrix-entries-for-d-matrix-outputs)
     * [Example of Printing the Registers and Lanes for an Entire Matrix](#example-of-printing-the-registers-and-lanes-for-an-entire-matrix)
     * [Example of Printing the Matrix Elements for all Registers and Lanes](#example-of-printing-the-matrix-elements-for-all-registers-and-lanes)
-     * [Examples of Setting Modifiers in AMD CDNA™ Architectures](#examples-of-setting-modifiers-in-amd-cdna-architectures)
+    * [Examples of Setting Modifiers in AMD CDNA™ Architectures](#examples-of-setting-modifiers-in-amd-cdna-architectures)
         * [Example of Using the CBSZ and ABID Modifiers to Change the A Matrix Layout](#example-of-using-the-cbsz-and-abid-modifiers-to-change-the-a-matrix-layout)
         * [Example of Using the BLGP Modifier to Change the B Matrix Layout](#example-of-using-the-blgp-modifier-to-change-the-b-matrix-layout)
             * [Example of Using the BLGP Modifier to Negate FP64 Input Matrices in the CDNA™ 3 Architecture](#example-of-using-the-blgp-modifier-to-negate-fp64-input-matrices-in-the-cdna-3-architecture)
         * [Example of Printing Compression Index Information for a Sparse Matrix Instruction](#example-of-printing-compression-index-information-for-a-sparse-matrix-instruction)
-    * [Examples of Setting Modifiers in the AMD RDNA™ 3 Architecture](#examples-of-setting-modifiers-in-the-amd-rdna-3-architecture)
+    * [Examples of Setting Modifiers in the AMD RDNA™ 3 and RDNA 4 Architectures](#examples-of-setting-modifiers-in-the-amd-rdna-3-and-rdna-4-architectures)
         * [Example of Using the OPSEL Modifier to Change the C and D Matrix Storage in the AMD RDNA™ 3 Architecture](#example-of-using-the-opsel-modifier-to-change-the-c-and-d-matrix-storage-in-the-amd-rdna-3-architecture)
+        * [Example of Using the OPSEL Modifier to Change the Compression Index Set in the AMD RDNA™ 4 Architecture](#example-of-using-the-opsel-modifier-to-change-the-compression-index-set-in-the-amd-rdna-4-architecture)
         * [Example of Using the NEG Modifier to Negate Input Matrices](#example-of-using-the-neg-modifier-to-negate-input-matrices)
     * [Details of AMD Matrix Multiplication Instruction Encodings](#details-of-amd-matrix-multiplication-instruction-encodings)
         * [Details of the VOP3P-MAI Matrix Multiplication Instruction Encoding in the AMD CDNA™ 1 - CDNA 3 Architectures](#details-of-the-vop3p-mai-matrix-multiplication-instruction-encoding-in-the-amd-cdna-1---cdna-3-architectures)
-        * [Details of the VOP3P Matrix Multiplication Instruction Encoding in the AMD RDNA™ 3 Architecture](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-in-the-amd-rdna-3-architecture)
+        * [Details of the VOP3P Matrix Multiplication Instruction Encoding in the AMD RDNA™ 3 and RDNA 4 Architectures](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-in-the-amd-rdna-3-and-rdna-4-architectures)
     * [Further Materials](#further-materials)
     * [Trademark Attribution](#trademark-attribution)
 
@@ -86,7 +87,8 @@ Command line parameters are case sensitive, but inputs for the command-line para
     * `CDNA`, `CDNA1`, `gfx908`, `arcturus`, or `MI100`: The AMD Instinct&trade; MI100 series of accelerators
     * `CDNA2`, `gfx90a`, `aldebaran`, `MI200`, `MI210`, `MI250`, or `MI250X`: The AMD Instinct MI200 series of accelerators, including AMD Instinct MI210, AMD Instinct MI250, and AMD Instinct MI250X
     * `CDNA3`, `gfx940`, `gfx941`, `gfx942`, `aqua_vanjaram`, `MI300`, `MI300A`, `MI300X`, or `MI325X`: The AMD Instinct MI300 series of accelerators
-    * `RDNA3`, `gfx1100`, `gfx1101`, `gfx1102`, `gfx1103`, `gfx1150`, `gfx1151`, `gfx1152`, `gfx1153`: The AMD Radeon&trade; RDNA&trade; 3 series of GPUs
+    * `RDNA3`, `gfx1100`, `gfx1101`, `gfx1102`, `gfx1103`, `gfx1150`, `gfx1151`, `gfx1152`, or `gfx1153`: The AMD Radeon&trade; RDNA&trade; 3 series of GPUs
+    * `RDNA4`, `gfx1200` or `gfx1201`: The AMD Radeon RDNA 4 series of GPUs
 * `--list-instructions` (or `-L`): This parameter will print the supported matrix multiplication instructions for the chosen architecture and exit the application.
 * `--instruction {instruction mnemonic}` (or `-i {instruction mnemonic}`): This parameter chooses which instruction, from the list of legal matrix multiplication instructions in the chosen architecture, to use for the calculations in this tool.
 
@@ -1160,9 +1162,9 @@ Instruction: V_SMFMAC_F32_16X16X32_F16
 K[2][31] = v0{50}.[31:28]
 ```
 
-Examples of Setting Modifiers in the AMD RDNA&trade; 3 Architecture
+Examples of Setting Modifiers in the AMD RDNA&trade; 3 and RDNA 4 Architectures
 -------------------------------------------------------------------------------------------------------
-AMD Radeon&trade; GPUs that use the RDNA 3 architecture allow setting modifier fields that change how the matrix multiplication instructions access data out of registers.
+AMD Radeon&trade; GPUs that use the RDNA 3 and RDNA 4 architecture allow setting modifier fields that change how the matrix multiplication instructions access data out of registers.
 Examples of using these fields, `OPSEL`, and `NEG`, are shown below.
 
 ### Example of Using the OPSEL Modifier to Change the C and D Matrix Storage in the AMD RDNA&trade; 3 Architecture
@@ -1265,22 +1267,69 @@ Instruction: V_WMMA_F16_16X16X16_F16
 
 In this case, because `OPSEL[2]=1`, only the top half of each register (bits 31:16) is used.
 
+### Example of Using the OPSEL Modifier to Change the Compression Index Set in the AMD RDNA&trade; 4 Architecture
+The AMD Radeon&trade; GPUs that use the RDNA&trade; 4 architecture support instruction that accelerate matrix multiplication for A\[\] matrices compressed with 4:2 structural sparsity.
+These sparse wave matrix multiply accumulate (SWMMAC) instructions perform `D += A*B`.
+They do not allow a C input matrix that is not equal to the D output matrix; they instead accumulate into the destination matrix.
+The Src2 input of these instructions is instead a VGPR that contains the compression information.
+
+For every 4-contiguous-entry chunk of the A\[\] matrix, 2 of the input values are compressed to zero and not stored.
+As such, the A\[\] matrix can be stored in half as much space and the matrix multiplication can be performed at twice the speed by skipping the 0-multiplications.
+However, for every non-zero entry of A\[\] stored in registers, we need 2 bits to indicate which of the original 4 entries of A\[\] are stored in this register.
+For example, if the first two entries in a register of A\[\] hold the values of `A[0][2]` and `A[0][3]`, because `A[0][0]` and `A[0][1]` are compressed out, the first two entries of the compression index would store `2` and `3`, respectively.
+
+This compression index information is stored in the VGPR pointed to by the SWMMAC instruction's Src2 input register field.
+For sparse instructions, this tool can query the layout of this register using the same four options used for other matrix queries: `--get-register`, `--matrix-entry`, `--register-layout`, and `--matrix-layout`.
+
+To access this compression index, the option `--compression` or `-k` should be passed instead of the options for matrices A-D.
+
+The following is an example usage, where we are requesting the location within the compression indices for the 2nd row and 31st column for the V\_SWMMAC\_F32\_16X16X32\_F16 in the RDNA 4 architecture:
+```
+$ ./matrix_calculator.py --architecture rdna4 --instruction v_swmmac_f32_16x16x32_f16 --get-register --I-coordinate 2 --K-coordinate 31 --compression
+Architecture: RDNA4
+Instruction: V_SWMMAC_F32_16X16X32_F16
+K[2][31] = v0{18}.[15:12]
+```
+
+This indicates that the compression bits for this entry should be put into the 13th and 12th bits of the Src2 VGPR's lane 18.
+Or they should be placed into the 15th and 14th bits, if this is the second value contained in the post-compression block.
+
+The `--opsel` modifier can also affect the output of the compression index.
+Because the VGPR that holds the compression index is 32b long, some sparse matrix instructions do not need the entire all 32b of each 32- or 64-wide VGPR to hold the compression indices.
+In this case, the remaining bits in each VGPR can be used to hold mutliple sets of compression indices.
+Setting `OPSEL` allows picking between these sets.
+The `OPSEL` modifier is only used for this purpose in the RDNA 4 architecture.
+
+For example, the following is the same instruction as before, looking for the compression index of the 2nd row and 31st column of V\_SWMMAC\_F32\_16X16X32\_F16 in the RDNA4 architecture, but setting `OPSEL` modifier to 1 in order to access the 2nd set of compression indices within the register.
+
+```
+$ ./matrix_calculator.py --architecture rdna4 --instruction v_swmmac_f32_16x16x32_f16 --get-register --I-coordinate 2 --K-coordinate 31 --compression --opsel 1
+Architecture: RDNA4
+Instruction: V_SWMMAC_F32_16X16X32_F16
+K[2][31] = v0{18}.[31:28]
+```
+
+The difference in this example is that the 1st compression index set for this coordinate was contained in the 18th lane's VGPR bits 15:12.
+The 2nd compression index set for this coordinate is contained in the 18th lane's VGPR bits 31:28.
+
 ### Example of Using the NEG Modifier to Negate Input Matrices
-The RDNA&trade; 3 architecture allows two separate three-bit modifiers, `NEG` and `NEG_HI`, which indicate if bits within the three input matrices (A, B, and/or C) should have their values negated before being sent to the AI Accelerator.
-For floating point WMMA instructions, setting the lowest-order bit of these registers will negate Src0, the values of the A matrix.
+The RDNA&trade; 3 and RDNA 4 architectures allow two separate three-bit modifiers, `NEG` and `NEG_HI`, which indicate if bits within the three input matrices (A, B, and/or C) should have their values negated before being sent to the AI Accelerator.
+For 16-bit floating point WMMA and SWMMAC instructions, setting the lowest-order bit of these registers will negate Src0, the values of the A matrix.
 `NEG[0]` will negate floating point values from bits 0-15 of Src0, while `NEG_HI[0]` will negate floating point values from bits 16-31 of Src0.
-For floating point WMMA instructions, setting the middle bit of NEG will negate Src1, the values of the B matrix.
+For 16-bit floating point WMMA and SWMMAC instructions, setting the middle bit of NEG will negate Src1, the values of the B matrix.
 `NEG[1]` will negate floating point values from bits 0-15 of Src1, while `NEG_HI[1]` will negate floating point values from bits 16-31 of Src1.
-For floating point WMMA instructions, setting the highest-order bit of NEG will negate Src3, the values of the C matrix, while setting the highest-order bit of NEG_HI will take the absolute value of the C matrix entry.
+For 16-bit floating point WMMA and SWMMAC instructions, setting the highest-order bit of NEG will negate Src3, the values of the C matrix, while setting the highest-order bit of `NEG_HI` will take the absolute value of the C matrix entry.
 Any of the bits may be set at the same time; when `NEG[2]` and `NEG_HI[2]` are both set, the absolute value is calculated before the negation.
 
-For integer WMMA instructions, the two lower-order bits of `NEG` are used to control whether the values in the A\[\] and B\[\] matrices are treated as unsigned or signed integers.
+The `NEG` modifier is not supported by WMMA and SWMMAC instructions operating on 8-bit floating point values.
+
+For integer WMMA and SWMMAC instructions, the two lower-order bits of `NEG` are used to control whether the values in the A\[\] and B\[\] matrices are treated as unsigned or signed integers.
 `NEG[2]` and the entire `NEG_HI` modifier may not be used to negate the A\[] or B\[] matrices for integer WMMA instructions, and they should be set to 0.
 
 This tool allows setting the `NEG` field using the `--neg` flag for architectures and instructions that support this modifier.
 The  `--neg_hi` flag is used to set the `NEG_HI` field.
 Because these are 3-bit fields, legal values for this option are integers between 0 and 7, inclusive.
-See [the later section on instruction encodings](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-in-the-amd-rdna-3-architecture) for how the `NEG` field and `NEG_HI` fields interact.
+See [the later section on instruction encodings](#details-of-the-vop3p-matrix-multiplication-instruction-encoding-in-the-amd-rdna-3-and-rdna-4-architectures) for how the `NEG` field and `NEG_HI` fields interact.
 This tool does not let users manually change the `NEG_HI` field.
 
 The following is an example that requests the matrix layout of the matrix B for the V\_WMMA\_F32\_16X16X16\_F16 instruction in the RDNA 3 architecture, with the `NEG` and `NEG_HI` value of 6.
@@ -1461,8 +1510,9 @@ The following fields are illustrated:
 * ACC\_CD
     * Single bit that controls whether the C\[\] and D\[\] matrices use the ArchVGPR space (when set to 0) or the AccVGPR space (when set to 1)
 
-### Details of the VOP3P Matrix Multiplication Instruction Encoding in the AMD RDNA&trade; 3 Architecture
-In the RDNA 3 architecture, matrix multiplications instructions contain "WMMA", or wave matrix multiply accumulate, in their mnemonics.
+### Details of the VOP3P Matrix Multiplication Instruction Encoding in the AMD RDNA&trade; 3 and RDNA 4 Architectures
+In the RDNA 3 and RDNA 4 architectures, matrix multiplications instructions contain "WMMA", or wave matrix multiply accumulate, in their mnemonics.
+Instructions that execute matrix multiplication on 4:2 structured sparse matrices contain "SWMMAC", or sparse wave matrix multiply accumulate, in their mnemonics.
 This section details the instruction encoding and the configuration fields for these instructions.
 
 These operations are encoded in the VOP3P (**V**ector **Op** with **3** Inputs, Doing **P**acked Math) instruction encoding space.
@@ -1535,18 +1585,21 @@ The following fields are illustrated:
         * Bit 46 is OPSEL_HI bit 2
         * Bit 28 is OPSEL_HI bit 1
         * Bit 27 is OPSEL_HI bit 0
-    * Unused by WMMA instructions. Set to 0.
+    * Unused by WMMA and SWMMAC instructions in RDNA 3 and RDNA 4. Set to 0.
 * NEG
     * Bits 31:29
     * Controls the values sent into the matrix multiplication units from the lower halves of each input register.
     * Bit 29:
         * For floating-point WMMA instructions, setting this to 1 will negate the values of the A\[\] matrix which are read from bits 0-15 of Vsrc0
+            * This input modifier is not supported by 8-bit floating point operations in the RDNA 4 architecture
         * For integer WMMA instructions, this will indicate whether the integer type in A\[\] is signed or unsigned (0 = unsigned, 1 = signed)
     * Bit 30:
         * For floating-point WMMA instructions, setting this to 1 will negate the values of the B\[\] matrix which are read from bits 0-15 of Vsrc1
+            * This input modifier is not supported by 8-bit floating point operations in the RDNA 4 architecture
         * For integer WMMA instructions, this will indicate whether the integer type in B\[\] is signed or unsigned (0 = unsigned, 1 = signed)
     * Bit 31:
         * For floating-point WMMA instructions, setting this to 1 will negate the values of the C\[\] matrix, which are read from Vsrc2
+            * This input modifier is not supported by 8-bit floating point operations in the RDNA 4 architecture
         * For integer WMMA instructions, this bit must be zero
     * Described in detail in the section: [Example of Using the NEG Modifier to Negate Input Matrices](#example-of-using-the-neg-modifier-to-negate-input-matrices)
 * Vdst
@@ -1557,19 +1610,26 @@ The following fields are illustrated:
     * Bits 42:40
     * Bit 40:
         * For floating-point WMMA instructions, setting this to 1 will negate the values of the A\[\] matrix which are read from bits 16-31 of Vsrc0
+            * This input modifier is not supported by 8-bit floating point operations in the RDNA 4 architecture
         * For integer WMMA instructions, this bit must be zero
     * Bit 41:
         * For floating-point WMMA instructions, setting this to 1 will negate the values of the B\[\] matrix which are read from bits 16-31 of Vsrc1
+            * This input modifier is not supported by 8-bit floating point operations in the RDNA 4 architecture
         * For integer WMMA instructions, this bit must be zero
     * Bit 42:
         * For floating-point WMMA instructions, setting this to 1 will take the absolute values of the C\[\] matrix entries which are read from Vsrc2 (absolute value calculation occurs before the negation modifier)
+            * This input modifier is not supported by 8-bit floating point operations in the RDNA 4 architecture
         * For integer WMMA instructions, this bit must be zero
 * OPSEL
     * Bits 45:43
-    * When working on 16-bit output instructions, `OPSEL[2]` (bit 45) controls whether to read from the low or high 16 bits are read from C\[\] (Vsrc2) and whether the output result is stored in the low or high 16 bits of each entry of D\[\] (Vdst)
-    * Bits 44 and 43 are not used by WMMA instructions.
-    * Bit 45 is not used by WMMA instructions with a 32-bit output.
-    * Described in detail in the section: [Example of Using the OPSEL Modifier to Change the C and D Matrix Storage](#example-of-using-the-opsel-modifier-to-change-the-c-and-d-matrix-storage)
+    * In the RDNA 3 architecture:
+        * When working on 16-bit output instructions, `OPSEL[2]` (bit 45) controls whether to read from the low or high 16 bits are read from C\[\] (Vsrc2) and whether the output result is stored in the low or high 16 bits of each entry of D\[\] (Vdst)
+        * Bits 44 and 43 are not used by WMMA instructions.
+        * Bit 45 is not used by WMMA instructions with a 32-bit output.
+        * Described in detail in the section: [Example of Using the OPSEL Modifier to Change the C and D Matrix Storage in the AMD RDNA™ 3 Architecture](#example-of-using-the-opsel-modifier-to-change-the-c-and-d-matrix-storage-in-the-amd-rdna-3-architecture)
+    * In the RDNA 4 architecture:
+        * In sparse matrix (SWMMAC) instructions, the OPSEL field is used to pick between the available sets of compression index values contained in the Vsrc2 register.
+        * Described in detail in the section: [Example of Using the OPSEL Modifier to Change the Compression Index Set in the AMD RDNA™ 4 Architecture](#example-of-using-the-opsel-modifier-to-change-the-compression-index-set-in-the-amd-rdna-4-architecture)
 * CLAMP
     * Single bit that controls whether integer output results saturate when they reach the maximum or minimum representable value for that integer type.
     * This field does not affect floating point WMMA operations.
@@ -1589,6 +1649,8 @@ This section is meant to contains a list of as many of these documents as possib
 * RDNA&trade; Architecture Information
     * <https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna3-shader-instruction-set-architecture-feb-2023_0.pdf>
         * Public ISA Guide for AMD Radeon&trade; GPUs using the RNDA3 ISA
+    * <https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna4-instruction-set-architecture.pdf>
+        * Public ISA Guide for AMD Radeon GPUs using the RDNA4 ISA
 * AMD Blog Posts
     * <https://gpuopen.com/learn/amd-lab-notes/amd-lab-notes-matrix-cores-README/>
         * AMD lab notes about AMD Matrix Cores, which covers the use of MFMA instructions in CDNA 1 and CDNA 2 accelerators
