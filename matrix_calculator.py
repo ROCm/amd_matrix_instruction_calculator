@@ -31,9 +31,11 @@ AMD Instinct(tm) accelerators, including:
  - AMD CDNA 2 architecture accelerators, such as AMD Instinct MI200
  - AMD CDNA 3 architecture accelerators, such as AMD Instinct MI300
 
-This also includes the Wave Matrix Multiply Accumulate (WMMA) instructions
-that drive the AI Accelerators in AMD Radeon(tm) GPUs, including:
+This also includes the Wave Matrix Multiply Accumulate (WMMA) and Sparse
+Wave Matrix Multiply Accumulate (SWMMAC) instructions that drive the AI
+Accelerators in AMD Radeon(tm) GPUs, including:
  - AMD RDNA(tm) 3 architecture GPUs
+ - AMD RDNA 4 architecture GPUs
 
 There are five options for each matrix multiplication instruction:
  - Print general information about the instruction, such as its
@@ -48,8 +50,8 @@ There are five options for each matrix multiplication instruction:
  - Print the A[], B[], C[], or D[] matrix entries for all of the
    instructions' registers and lanes (--matrix-layout).
 
-SMFMAC instructions work on 4:2-sparse matrices, and have a "K[]" matrix.
-This is the compression index input, which is put into SrcC in place of
+SMFMAC and SWMMAC instructions work on 4:2-sparse matrices, and have a "K[]"
+matrix. This is the compression index input, which is put into SrcC in place of
 the C[] matrix.
 
 This register is legal for the last four options (--get-register,
@@ -71,7 +73,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.2.5"
+VERSION = "1.3"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -104,7 +106,10 @@ dict_isas = {
     'gfx1150'          : 'rdna3',
     'gfx1151'          : 'rdna3',
     'gfx1152'          : 'rdna3',
-    'gfx1153'          : 'rdna3'
+    'gfx1153'          : 'rdna3',
+    'rdna4'            : 'rdna4',
+    'gfx1200'          : 'rdna4',
+    'gfx1201'          : 'rdna4'
 }
 
 class MatrixNumericalType(TypedDict):
@@ -121,7 +126,7 @@ class MatrixNumericalType(TypedDict):
     size: int
     description: str
 
-# Dictionary for claculating the size of particular data types
+# Dictionary for calculating the size of particular data types
 dict_math_types: Dict[str, MatrixNumericalType] = {
     'fp64': {
         'size': 64,
@@ -159,6 +164,14 @@ dict_math_types: Dict[str, MatrixNumericalType] = {
         'size': 8,
         'description': 'BF8 (AMD 5-bit exponent, 2-bit mantissa floating point)',
     },
+    'fp8': {
+        'size': 8,
+        'description': 'FP8 (OCP 4-bit exponent, 3-bit mantissa floating point)',
+    },
+    'bf8': {
+        'size': 8,
+        'description': 'BF8 (OCP 5-bit exponent, 2-bit mantissa floating point)',
+    },
     'iu8': {
         'size': 8,
         'description': 'IU8 (Signed/unsigned 8-bit integer)',
@@ -175,7 +188,7 @@ class MatrixInstruction(TypedDict):
 
     A typed dictionary container for the data that defines a matrix multiplication instruction in
     this tool. The details of how the matrix multiplication instruction, the matrix it works on,
-    the avaialble modifiers, and the performance are contained in a series of fields in this
+    the available modifiers, and the performance are contained in a series of fields in this
     container.
 
     Attributes:
@@ -2417,7 +2430,493 @@ dict_insts: Dict[str, Dict[str, MatrixInstruction]] = {
             'neg': True,
             'coexec': False,
             'coexec_delay': -1
+        }
+    },
+    'rdna4': {
+        'v_wmma_f32_16x16x16_f16': {
+            'arch': 'rdna4',
+            'opcode': 64,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
         },
+        'v_wmma_f32_16x16x16_bf16': {
+            'arch': 'rdna4',
+            'opcode': 65,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_f16_16x16x16_f16': {
+            'arch': 'rdna4',
+            'opcode': 66,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp16',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_bf16_16x16x16_bf16': {
+            'arch': 'rdna4',
+            'opcode': 67,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'bf16',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_i32_16x16x16_iu8': {
+            'arch': 'rdna4',
+            'opcode': 68,
+            'in_type': 'iu8',
+            'in_type_src1': 'iu8',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_i32_16x16x16_iu4': {
+            'arch': 'rdna4',
+            'opcode': 69,
+            'in_type': 'iu4',
+            'in_type_src1': 'iu4',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_i32_16x16x32_iu4': {
+            'arch': 'rdna4',
+            'opcode': 74,
+            'in_type': 'iu4',
+            'in_type_src1': 'iu4',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_f32_16x16x16_fp8_fp8': {
+            'arch': 'rdna4',
+            'opcode': 70,
+            'in_type': 'fp8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_f32_16x16x16_fp8_bf8': {
+            'arch': 'rdna4',
+            'opcode': 71,
+            'in_type': 'fp8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_f32_16x16x16_bf8_fp8': {
+            'arch': 'rdna4',
+            'opcode': 72,
+            'in_type': 'bf8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_wmma_f32_16x16x16_bf8_bf8': {
+            'arch': 'rdna4',
+            'opcode': 73,
+            'in_type': 'bf8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 16,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': False,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_f32_16x16x32_f16': {
+            'arch': 'rdna4',
+            'opcode': 80,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_f32_16x16x32_bf16': {
+            'arch': 'rdna4',
+            'opcode': 81,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_f16_16x16x32_f16': {
+            'arch': 'rdna4',
+            'opcode': 82,
+            'in_type': 'fp16',
+            'in_type_src1': 'fp16',
+            'out_type': 'fp16',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_bf16_16x16x32_bf16': {
+            'arch': 'rdna4',
+            'opcode': 83,
+            'in_type': 'bf16',
+            'in_type_src1': 'bf16',
+            'out_type': 'bf16',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 16,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_i32_16x16x32_iu8': {
+            'arch': 'rdna4',
+            'opcode': 84,
+            'in_type': 'iu8',
+            'in_type_src1': 'iu8',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_i32_16x16x32_iu4': {
+            'arch': 'rdna4',
+            'opcode': 85,
+            'in_type': 'iu4',
+            'in_type_src1': 'iu4',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_i32_16x16x64_iu4': {
+            'arch': 'rdna4',
+            'opcode': 86,
+            'in_type': 'iu4',
+            'in_type_src1': 'iu4',
+            'out_type': 'int32',
+            'm': 16,
+            'n': 16,
+            'k': 64,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': True,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': True,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_f32_16x16x32_fp8_fp8': {
+            'arch': 'rdna4',
+            'opcode': 87,
+            'in_type': 'fp8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_f32_16x16x32_fp8_bf8': {
+            'arch': 'rdna4',
+            'opcode': 88,
+            'in_type': 'fp8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_f32_16x16x32_bf8_fp8': {
+            'arch': 'rdna4',
+            'opcode': 89,
+            'in_type': 'bf8',
+            'in_type_src1': 'fp8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        },
+        'v_swmmac_f32_16x16x32_bf8_bf8': {
+            'arch': 'rdna4',
+            'opcode': 90,
+            'in_type': 'bf8',
+            'in_type_src1': 'bf8',
+            'out_type': 'fp32',
+            'm': 16,
+            'n': 16,
+            'k': 32,
+            'blocks': 1,
+            'cycles': 8,
+            'integer': False,
+            'c_d_arch': True,
+            'gpr_byte_align': 4,
+            'blgp': False,
+            'cbsz_abid': False,
+            'sparse': True,
+            'cd_opsel': False,
+            'neg': False,
+            'coexec': False,
+            'coexec_delay': -1
+        }
     }
 }
 
@@ -2435,6 +2934,34 @@ def is_gfx9_arch(inst_info: MatrixInstruction) -> bool:
     """
     return inst_info['arch'] in ('cdna1', 'cdna2', 'cdna3')
 
+def is_gfx11_arch(inst_info: MatrixInstruction) -> bool:
+    """ Queries if an instruction is in the gfx11 architecture.
+
+    Args:
+        inst_info: MatrixInstruction that holds the details of a matrix
+            multiplication instruction.
+
+    Returns:
+        A boolean that is True when the architecture for the input MatrixInstruction is from
+        a gfx11 architecture (i.e., RDNA3).
+        The boolean will be False if the MatrixInstruction is from a non-gfx11 architecture.
+    """
+    return inst_info['arch'] == 'rdna3'
+
+def is_gfx12_arch(inst_info: MatrixInstruction) -> bool:
+    """ Queries if an instruction is in the gfx12 architecture.
+
+    Args:
+        inst_info: MatrixInstruction that holds the details of a matrix
+            multiplication instruction.
+
+    Returns:
+        A boolean that is True when the architecture for the input MatrixInstruction is from
+        a gfx12 architecture (i.e., RDNA4).
+        The boolean will be False if the MatrixInstruction is from a non-gfx12 architecture.
+    """
+    return inst_info['arch'] == 'rdna4'
+
 def print_instructions(arch: str, instructions: Dict[str, MatrixInstruction],
                        to_print: TextIO) -> None:
     """ Prints all of the instructions available for the chosen architecture.
@@ -2442,7 +2969,7 @@ def print_instructions(arch: str, instructions: Dict[str, MatrixInstruction],
     Args:
         arch: string that contains the accelerator architecture's name to print
         instructions: dictionary of [mnemonic, instruction_details] pairs for
-            the instructions avaialble in this architecture. All of the mnemonics
+            the instructions available in this architecture. All of the mnemonics
             will be printed by this function.
         to_print: file to print instruction to.
 
@@ -2505,7 +3032,7 @@ def parse_and_run() -> int:
 
     Parses the command-line arguments for this script, then run the requested functions.
     Prints help about the application if requested, or if bad arguments are passed in.
-    Checsk to make sure the arguments are valid  respect to one another and gives
+    Checks to make sure the arguments are valid  respect to one another and gives
     recommendations if they are not.
 
     Returns:
@@ -2703,8 +3230,10 @@ def parse_and_run() -> int:
     calc: InstCalc
     if is_gfx9_arch(inst_info):
         calc = InstCalcGfx9(inst_to_use, inst_info, int(args.wavefront))
-    else:
+    elif is_gfx11_arch(inst_info):
         calc = InstCalcGfx11(inst_to_use, inst_info, int(args.wavefront))
+    else:
+        calc = InstCalcGfx12(inst_to_use, inst_info, int(args.wavefront))
 
     if args.detail_instruction:
         calc.print_instruction_information()
@@ -2796,7 +3325,7 @@ def parse_and_run() -> int:
               file=sys.stderr)
         return -2
 
-    # For sparse matrices, a non-zero CBSZ[1:0] causes ABID to choose the compression index
+    # For gfx9 sparse matrices, a non-zero CBSZ[1:0] causes ABID to choose the compression index
     # set. Technically CBSZ[2] is undefined -- for safety, let us say setting it is illegal.
     # For non-sparse matrices, CBSZ chooses 2^(how many blocks to broadcast into).
     # After that, ABID chooses which block within the 2^(CBSZ) to broadcast to the others.
@@ -2861,7 +3390,7 @@ def parse_and_run() -> int:
                 print(" may only be set to zero.", file=sys.stderr)
             return -2
     # BLGP chooses between 8 different B matrix lane swizzles or broadcasts. 0 is default.
-    # In CDNA3, the three BLGP bits are used to automaticlaly negate the values in
+    # In CDNA3, the three BLGP bits are used to automatically negate the values in
     # matrices A, B, and C, respectively.
     if int(args.blgp) > 0:
         if not inst_info['blgp']:
@@ -2886,32 +3415,59 @@ def parse_and_run() -> int:
             print("The BLGP modifier may only contain values between ", end="", file=sys.stderr)
             print("0 - 7, inclusive.", file=sys.stderr)
             return -2
-    # On matrix operations with 16b outputs, the OPSEL[2] bit is used to decide whether to
-    # use the lower or upper half of each register in C[] and D[]. As such, the only valid
-    # values are 0 (OPSEL[2] = 0) and 4 (OPSEL[2] = 1). Also only available on a subset of
-    # instructions and architectures.
     if int(args.opsel) > 0:
         if is_gfx9_arch(inst_info):
             print(f"The chosen architecture, {arch_to_use.upper()}, ", end="", file=sys.stderr)
             print("does not support the OPSEL modifier.", file=sys.stderr)
             return -2
-        if not inst_info['cd_opsel']:
-            print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
-            print(f"in the {arch_to_use.upper()} architecture, does ", end="", file=sys.stderr)
-            print("not support the OPSEL modifier.", file=sys.stderr)
-            return -2
-        if matrix_to_use not in ('c', 'd'):
-            print("The OP_SEL modifier may only be used on matrices ", end="", file=sys.stderr)
-            print(f"C and D for the instruction {inst_to_use.upper()} ", end="", file=sys.stderr)
-            print(f"on the {arch_to_use.upper()} architecture.", file=sys.stderr)
-            return -2
-        if int(args.opsel) != 4:
-            print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
-            print(f"in the {arch_to_use.upper()} architecture, ", end="", file=sys.stderr)
-            print("only supports the OPSEL values 0 and 4.", file=sys.stderr)
-            return -2
-    # On RDNA3 architectures, the NEG field is used for two things: for FP operations, its
-    # three bits are used to negate the values of the A, B, and C matrices, respectively.
+        if is_gfx11_arch(inst_info):
+            # In gfx11 matrix operations with 16b outputs, OPSEL[2] is used to decide whether to
+            # use the lower or upper half of each register in C[] and D[]. As such, the only valid
+            # values are 0 (OPSEL[2] = 0) and 4 (OPSEL[2] = 1). Also only available on a subset of
+            # instructions and architectures.
+            if not inst_info['cd_opsel']:
+                print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
+                print(f"in the {arch_to_use.upper()} architecture, does ", end="", file=sys.stderr)
+                print("not support the OPSEL modifier.", file=sys.stderr)
+                return -2
+            if matrix_to_use not in ('c', 'd'):
+                print("The OPSEL modifier may only be used on matrices C ", end="", file=sys.stderr)
+                print(f"and D for the instruction {inst_to_use.upper()} ", end="", file=sys.stderr)
+                print(f"on the {arch_to_use.upper()} architecture.", file=sys.stderr)
+                return -2
+            if int(args.opsel) != 4:
+                print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
+                print(f"in the {arch_to_use.upper()} architecture, ", end="", file=sys.stderr)
+                print("only supports the OPSEL values 0 and 4.", file=sys.stderr)
+                return -2
+        if is_gfx12_arch(inst_info):
+            # In gfx12 sparse operations, OPSEL is used to pick the set within the compression
+            # index register. For wave32, OPSEL[0] picks between two sets. For wave64, OPSEL[0] and
+            # OPSEL[1] are used to pick between four sets.
+            if not inst_info['sparse']:
+                print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
+                print(f"in the {arch_to_use.upper()} architecture, does ", end="", file=sys.stderr)
+                print("not support the OPSEL modifier.", file=sys.stderr)
+                return -2
+            if matrix_to_use != 'k':
+                print("The OPSEL modifier may only be used to choose ", end="", file=sys.stderr)
+                print("the set within the sparse compression index ", end="", file=sys.stderr)
+                print(f"register on the {arch_to_use.upper()} architecture.", file=sys.stderr)
+                return -2
+            max_opsel = calc.get_num_compression_sets() - 1
+            if int(args.opsel) > max_opsel:
+                print("The OPSEL modifier may only be ", end="", file=sys.stderr)
+                if max_opsel == 0:
+                    print("the value 0 when used ", end="", file=sys.stderr)
+                else:
+                    print(f"values between 0 and {max_opsel} when used ", end="", file=sys.stderr)
+                print(f"with the instruction {inst_to_use.upper()} and ", end="", file=sys.stderr)
+                print(f"{int(args.wavefront)}-wide wavefronts ", end="", file=sys.stderr)
+                print(f"on the {arch_to_use.upper()} architecture.", file=sys.stderr)
+                return -2
+
+    # On RDNA3 and RDNA4 architectures, the NEG field is used for two things: for FP operations,
+    # its three bits are used to negate the values of the A, B, and C matrices, respectively.
     # For FP, NEG[0] and NEG[1] affect the low 16 bits of each A and B register, respectively.
     # To fully negate an input matrix, the NEG_HI field in the instruction should also be set.
     # For floating-point inputs, NEG_HI[0] and NEG_HI[1] negate the high 16 bits of each
@@ -2975,8 +3531,8 @@ def parse_and_run() -> int:
         negate['c'] = bool(neg_this & 0x4)
         args.blgp = '0'
     elif not is_gfx9_arch(inst_info):
-        # RDNA3 uses the NEG and NEG_HI fields for negation decisions. But NEG[2] and NEG_HI must
-        # be zero for integer instructions.
+        # RDNA3 and RDNA4 use the NEG and NEG_HI fields for negation decisions. But NEG[2] and
+        # NEG_HI must be zero for integer instructions.
         # For floating-point NEG_HI[2] is actually used to set absolute value on the C matrix.
         neg = int(args.neg)
         neg_hi = int(args.neg_hi)
@@ -2997,14 +3553,19 @@ def parse_and_run() -> int:
             negate['c'] = bool(neg & 0x4)
             negate['c_abs'] = bool(neg_hi & 0x4)
 
+
+    if is_gfx9_arch(inst_info):
+        sparse_inst_name = "MFMAC"
+    else:
+        sparse_inst_name = "WMMAC"
     if (inst_info['sparse'] and matrix_to_use == 'c'):
         print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
-        print("is a sparse MFMAC op and performs D += A*B.", file=sys.stderr)
+        print(f"is a sparse {sparse_inst_name} op and performs D += A*B.", file=sys.stderr)
         print("This instruction does not support the C matrix as an input.", file=sys.stderr)
         return -2
     if ((not inst_info['sparse']) and matrix_to_use == 'k'):
         print(f"The chosen instruction, {inst_to_use.upper()}, ", end="", file=sys.stderr)
-        print("is not a sparse MFMAC op.", file=sys.stderr)
+        print(f"is not a sparse {sparse_inst_name} op.", file=sys.stderr)
         print("This instruction does not support the sparse ", end="", file=sys.stderr)
         print("index register as an input.", file=sys.stderr)
         return -2
@@ -3113,9 +3674,25 @@ class InstCalc(metaclass=ABCMeta):
         # Abstract class always returns 0, only architectures where this matter needs to override
         return 0
 
+    # Disabling check here because this function can be over-ridden by child classes that need
+    # this to be a method and have access to self variables.
+    #pylint: disable=no-self-use
+    def _get_num_compression_bit_offset(self, opsel: int) -> int:
+        """ Returns the bit offset of the first compression index, based on instruction modifiers
+
+        Args:
+            opsel: The OPSEL modifier for the matrix instruction
+
+        Returns:
+            An integer that contains the starting bit of this set of compression indices
+        """
+        # Abstract class always returns 0, only architectures where this matter needs to override
+        del opsel
+        return 0
+
     @staticmethod
     def _get_reg_name(data_size: int, sparse: bool, compression_index: bool, k_cbsz: int,
-                      k_abid: int, regno: int) -> str:
+                      k_abid: int, k_opsel_offset: int, regno: int) -> str:
         """ Calculates the register name and formats it as Va.c.
 
         Calculates the register name (but not lane) based on a regno. Formats it in Va.c
@@ -3130,15 +3707,19 @@ class InstCalc(metaclass=ABCMeta):
             sparse: True if this register is working on a structured sparsity input register
             compression_index: True if this register holds the compression index for a
                 structured sparsity instruction
-            k_cbsz: When working on compression indices, a non-zero CBSZ value will cause
+            k_cbsz: When working on compression indices in gfx9, a non-zero CBSZ value will cause
                 different register locations to be used for the compression index. As such,
                 when passing in compression_index=True, this integer field holds the
                 instruction's CBSZ modifier.
-            k_abid: When working on compression indices, a non-zero CBSZ value will cause
+            k_abid: When working on compression indices in gfx9, a non-zero CBSZ value will cause
                 different register locations to be used for the compression index. The ABID
                 field chooses which register location to use. As such, when passing in
                 compression_index=True and k_cbsz!=0, this integer field holds the
                 instruction's ABID modifier.
+            k_opsel_offset: When working on compression indices in gfx12, the OPSEL field chooses
+                which register location to use. As such, when passing in compression_index=true,
+                this field holds the number of VGPR bits this instruction's OPSEL modifier shifted
+                the output.
             regno: integer that holds the 'regno' (register storage location) that this
                 function will transform into a VGPR number and name.
 
@@ -3183,26 +3764,39 @@ class InstCalc(metaclass=ABCMeta):
                     this_str += f".[{16 * bitno + 15}:{16 * bitno}]"
             elif data_size == 4:
                 this_str += (str(int(regno / 8)))
-                bitno = regno % 8
-                this_str += f".[{bitno * 4 + 3}:{bitno * 4}]"
+                # See the above comment about sparse matrices. The concept is similar here
+                # in 4b values. .[3:0]/.[7:4] holding 4 values means we just report it as
+                # .[7:0] holding 4 matrix entries, etc.
+                if not sparse:
+                    bitno = regno % 8
+                    this_str += f".[{4 * bitno + 3}:{4 * bitno}]"
+                else:
+                    bitno = int(regno/2) % 4
+                    this_str += f".[{8 * bitno + 7}:{8 * bitno}]"
         else:
             # In the 4:2 compression case, the compression index requires 2 bits for each
             # actually-stored entry in the matrix (which of the four values is stored in the
             # first location, and which of the four values is stored in the second location).
             # As such, every entry in the compression array has 2 bits.
-            # The way this is stored in the compression matrix is in "sets" that are indexed
-            # ABID register. The first starts at VGPR0 bits 1:0, and extends for however many
-            # storage locations are contained in a lane of the A matrix's input VGPR.
+            # The way this is stored in the compression matrix is in "sets" that are indexed by
+            # ABID register (on gfx9). The first starts at VGPR0 bits 1:0, and extends for
+            # however many storage locations are contained in a lane of the A matrix's input VGPR.
             # The A matrix holds 2 VGPRs, that are each 4B.
             # With a data size of N bytes, this yields (8 / N) locations to store into.
-            this_str += str(int(regno * data_size / 64))
+            #this_str += str(int(regno * data_size / 64))
+            # However, on all existing architectures, the actual VGPR number is always 0
+            # This is a hack that will need to be fixed if some architecture in the future adds
+            # more
+            this_str += "0"
             # Move the register up by (8 / N) register slots for every value of ABID
             if k_cbsz != 0:
                 regno += int((64 * k_abid) / data_size)
-            # Do a floor(regno / 2) to get the base register bits that will hold thise register,
+            # Do a floor(regno / 2) to get the base register bits that will hold this register,
             # then multiply by 4 to offset the bits.
             index = int(regno / 2) * 4
-            this_str += f".[{index + 3}:{index}]"
+            # On some architectures, OPSEL will shift these starting locations instead of the
+            # ABID shift.
+            this_str += f".[{index + 3 + k_opsel_offset}:{index + k_opsel_offset}]"
         return this_str
 
     @staticmethod
@@ -3296,10 +3890,10 @@ class InstCalc(metaclass=ABCMeta):
 
     @staticmethod
     def _get_blgp_transformed_lane(lane: int, blgp: int) -> int:
-        """ Calculates the newlane used for an input after BLGP transformation.
+        """ Calculates the new lane used for an input after BLGP transformation.
 
         For some instructions, BLGP will cause the B matrix input into the math functions
-        to be pulled from different lanes than normal. This function salculate how BLGP
+        to be pulled from different lanes than normal. This function calculate how BLGP
         transforms a B matrix lane.
 
         Calculations are:
@@ -3307,8 +3901,8 @@ class InstCalc(metaclass=ABCMeta):
         BLGP=1 : Broadcast the first 32 lanes to all lanes
         BLGP=2 : Broadcast the 2nd 32 lanes to all lanes
         BLGP=3 : Rotate all lanes down by 16
-        BLGP=4 : Braodcast the first 16 lanes
-        BLGP=5 : Broadast the 2nd 16 lanes
+        BLGP=4 : Broadcast the first 16 lanes
+        BLGP=5 : Broadcast the 2nd 16 lanes
         BLGP=6 : Broadcast the 3rd 16 lanes
         BLGP=7 : Broadcast the 4th 16 lanes
 
@@ -3546,7 +4140,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             out_calc: True if, when printing the register location for the D
                 output matrix entry, you desire to also print the register
                 locations of the A, B, and C matrices that went into the
@@ -3626,7 +4220,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             cbsz: integer value of the instruction's CBSZ modifier
             abid: integer value of the instruction's ABID modifier
             blgp: integer value of the instruction's BLGP modifier
@@ -3694,7 +4288,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             opsel: integer value of the instruction's OPSEL modifier
 
         Returns:
@@ -3712,7 +4306,7 @@ class InstCalc(metaclass=ABCMeta):
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
         instead of storing two contiguous values, one in the lower and one in the upper.
-        In sucharchitectures and for  certain matrices, the OPSEL value controls whether
+        In such architectures and for  certain matrices, the OPSEL value controls whether
         to use the upper or lower halves.
 
         This function returns the number of slots to print in each register; the rest can
@@ -3724,7 +4318,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             gpr_ratio: the number of regnos in each GPR
 
         Returns:
@@ -3751,12 +4345,12 @@ class InstCalc(metaclass=ABCMeta):
         all of the matrix entries, one line at a time.
 
         If a single matrix entry can't fit in a VGPR (e.g. a 64b matrix entry requires
-        2 32b VGPR entries), we print a single ntry with V[n+1:n]{lane}, regardless
+        2 32b VGPR entries), we print a single entry with V[n+1:n]{lane}, regardless
         of whether the requested register was Vn+1 or Vn.
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             out_calc: True if, when printing the matrix entry for the D output
                 location, you desire to also print the matrix entries of the A, B,
                 and C matrices that went into the calculation of the output
@@ -3794,7 +4388,8 @@ class InstCalc(metaclass=ABCMeta):
         if lane >= self.wave_width:
             raise ValueError(fill(dedent(f"""Input value for 'lane', {lane}, is too large.
                                          Maximum value of lane for any instruction must not be """
-                                         f"greater than {self.wave_width-1}.")))
+                                         "greater than or equal to the wave size of "
+                                         f"{self.wave_width-1}.")))
         if lane != self._get_blgp_transformed_lane(lane, blgp):
             transforms = []
             for to_try in range(self.wave_width):
@@ -3859,12 +4454,12 @@ class InstCalc(metaclass=ABCMeta):
             gpr_ratio /= 2
 
         num_printed = 0
-        if matrix.lower() == 'k':
-            num_regnos_to_print *= 2
+        opsel_offset = self._get_num_compression_bit_offset(opsel)
         while num_printed < num_regnos_to_print:
             regno = int(reg * gpr_ratio) + int(offset)
             is_k = matrix.lower() == 'k'
-            base_gpr_name = self._get_reg_name(data_size, sparse, is_k, cbsz, abid, regno)
+            base_gpr_name = self._get_reg_name(data_size, sparse, is_k, cbsz, abid, opsel_offset,
+                                               regno)
             gpr_lane_name = self.__format_reg_lane(base_gpr_name, lane)
             if gpr_lane_name not in register_dict:
                 if ((matrix.lower() in ('a', 'k')) and cbsz != 0):
@@ -3893,8 +4488,8 @@ class InstCalc(metaclass=ABCMeta):
 
         When printing out the matrix entries are specific register/lane combinations, we
         sometimes have more than one register at that location. For instance, SMFMAC
-        instructions have 4 entires in a register that would only hold two values -- two of the
-        entries are compressed out. For the compression indicies, we have the similar type of
+        instructions have 4 entries in a register that would only hold two values -- two of the
+        entries are compressed out. For the compression indices, we have the similar type of
         compression. As such, we need to move the "regno" (the actual register{lane}.subset
         combination) ahead by a certain amount for every matrix entry we print.
 
@@ -3902,7 +4497,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
 
         Returns:
             Floating point scaling calculation, e.g. a value of 0.5 indicates that there are
@@ -3996,7 +4591,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             requested_output: string that indicates the type of output, from the list of
                 csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
@@ -4023,7 +4618,7 @@ class InstCalc(metaclass=ABCMeta):
         for b in range(B):
             if matrix.lower() in ('a', 'k'):
                 if print_blocks:
-                    # By setting CBSZ and ABID, it is possible to have mutliple blocks
+                    # By setting CBSZ and ABID, it is possible to have multiple blocks
                     # of the matrix math stored in a single register. So we want to
                     # print them as a single group.
                     if matrix.lower() == 'a':
@@ -4123,7 +4718,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
             requested_output: string that indicates the type of output, from the list of
                 csv, markdown, asciidoc, or grid
             negate: dictionary of matrix names to bools that indicate whether to
@@ -4170,12 +4765,13 @@ class InstCalc(metaclass=ABCMeta):
         table_to_print = []
         found_regnos = []
         seen_regno = set()
+        opsel_offset = self._get_num_compression_bit_offset(opsel)
         for lane in range(self.wave_width):
             lane = self._get_blgp_transformed_lane(lane, blgp)
             row_tab = [str(lane)]
             for regno in range(total_gpr_slots):
                 base_gpr_name = self._get_reg_name(data_size, sparse, matrix.lower() == 'k',
-                                                   cbsz, abid, regno)
+                                                   cbsz, abid, opsel_offset, regno)
                 gpr_lane_name = self.__format_reg_lane(base_gpr_name, lane)
                 # If we have CBSZ and ABID set, some lanes may not exist in this
                 # table, so skip over putting them in the list to print.
@@ -4211,7 +4807,7 @@ class InstCalc(metaclass=ABCMeta):
             # fill them with 4 matrix entries.
             if (not sparse or regno % 2 == 0):
                 header.append(self._get_reg_name(data_size, sparse, matrix.lower() == 'k',
-                                                 cbsz, abid, regno))
+                                                 cbsz, abid, opsel_offset, regno))
 
         deduplicated = []
         for x in table_to_print:
@@ -4490,7 +5086,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, and k (for the compression index of sparse matrics).
+                Legal values are a, b, and k (for the compression index of sparse matrices).
             wave_size: integer that holds the wave size for the requested conversion function
                 Legal values are 32 and 64.
 
@@ -4512,7 +5108,7 @@ class InstCalc(metaclass=ABCMeta):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
@@ -4546,7 +5142,9 @@ class InstCalc(metaclass=ABCMeta):
                 print(second_wrapper.fill(x))
 
     def _print_register_to_element_eqn(self, print_block: bool = False,
-                                       wave_size: Optional[int] = None) -> None:
+                                       wave_size: Optional[int] = None,
+                                       max_a_lane: Optional[int] = None,
+                                       max_b_lane: Optional[int] = None) -> None:
         """ Prints equation to map register+lane to matrix element.
 
         Print out simple equations for mapping a register and its lane to the element in the
@@ -4558,6 +5156,10 @@ class InstCalc(metaclass=ABCMeta):
             print_block: True if this equation should print information about blocks
             wave_size: integer that holds the wave size for the requested conversion function
                 Legal values are 32, 64, or passing nothing.
+            max_a_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for A and K matrices.
+            max_b_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for B matrices.
         """
         inst_info = self.inst_info
         sparse_op = inst_info['sparse']
@@ -4573,6 +5175,8 @@ class InstCalc(metaclass=ABCMeta):
             self.__print_long_element_eqn("A k", self._reg_lane_to_k_coord_eqn('a', wave_size))
         if print_block:
             print(f"        A block: {self._reg_lane_to_block_eqn('a')}")
+        if max_a_lane is not None:
+            print(f"            All lanes > {max_a_lane} are ignored for A matrix")
         if not inst_info['sparse']:
             cd_str = "C or D"
         else:
@@ -4580,10 +5184,14 @@ class InstCalc(metaclass=ABCMeta):
             print(f"        compression i: {self._reg_lane_to_i_coord_eqn('k', wave_size)}")
             self.__print_long_element_eqn("compression k",
                                           self._reg_lane_to_k_coord_eqn('k', wave_size))
+            if max_a_lane is not None:
+                print(f"            All lanes > {max_a_lane} are ignored for compression indices")
         print(f"        B j: {self.__reg_lane_to_j_coord_eqn('b')}")
         print(f"        B k: {self._reg_lane_to_k_coord_eqn('b', wave_size)}")
         if print_block:
             print(f"        B block: {self._reg_lane_to_block_eqn('b')}")
+        if max_b_lane is not None:
+            print(f"            All lanes > {max_b_lane} are ignored for B matrix")
         print(f"        {cd_str} i: {self._reg_lane_to_i_coord_eqn('d', wave_size)}")
         print(f"        {cd_str} j: {self.__reg_lane_to_j_coord_eqn('d')}")
         if print_block:
@@ -4678,7 +5286,7 @@ class InstCalc(metaclass=ABCMeta):
                 print(f"    Wave{size} register usage:")
             print(f"        GPRs required for A: {total_in_a_gprs}")
             print(f"        GPRs required for B: {total_in_b_gprs}")
-            # Sparse MFMAC instructions are D += A * B, so there is no C matrix at all.
+            # Sparse matrix instructions are D += A * B, so there is no C matrix at all.
             # Therefore, skip printing information about the C matrix.
             if not inst_info['sparse']:
                 print(f"        GPRs required for C: {total_out_gprs}")
@@ -4855,7 +5463,7 @@ class InstCalcGfx9(InstCalc):
         # will not move to different registers as we walk over k.
         local_element = k % elements_in_contiguous_gprs
         register_name = self._get_reg_name(data_size, sparse, compression_index, k_cbsz, k_abid,
-                                           local_element)
+                                           0, local_element)
 
         # The lane within the chosen register has three parts:
         # First: every block will walk over an entire column of the input (if
@@ -4925,7 +5533,7 @@ class InstCalcGfx9(InstCalc):
         local_element += int(i / (multirow_height * multirows_per_register)) * multirow_height
         # Finally, choose the register for the row within the multi-row
         local_element += int(i % multirow_height)
-        register_name = self._get_reg_name(data_size, False, False, 0, 0, local_element)
+        register_name = self._get_reg_name(data_size, False, False, 0, 0, 0, local_element)
 
         # Logic to find the lane within the register found above
         # Set the initial offset
@@ -5051,6 +5659,38 @@ class InstCalcGfx9(InstCalc):
         if out_size is None:
             out_size = get_data_size(self.inst_info['out_type'])
         return super()._get_instruction_num_gprs(matrix, in_lanes, out_size)
+
+    def _calculate_num_regnos_to_print(self, matrix: str, gpr_ratio: float) -> int:
+        """ Calculates the number of register slots to print for this matrix & instruction.
+
+        On some architectures, partial registers (such as a 16b output in a 32b register)
+        aren't tightly packed. For example, "lower" or "upper halves may be skipped
+        instead of storing two contiguous values, one in the lower and one in the upper.
+        In such architectures and for  certain matrices, the OPSEL value controls whether
+        to use the upper or lower halves.
+
+        This function returns the number of slots to print in each register; the rest can
+        be skipped.
+
+        In gfx9, sparse matrix values need to print twice as many "regnos" because the
+        register printing function needing to print twice as much data per register
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, and d.
+            gpr_ratio: the number of regnos in each GPR
+
+        Returns:
+            Integer indicating how many of the regnos in each GPR to print
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
+        """
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
+        num_regnos_to_print = super()._calculate_num_regnos_to_print(matrix, gpr_ratio)
+        if matrix.lower() == 'k':
+            num_regnos_to_print *= 2
+        return num_regnos_to_print
 
     def _coord_to_input_reg_eqn(self, matrix: str, wave_size: Optional[int] = 64) -> str:
         """ Returns formula for mapping a matrix coordinate to its input register number.
@@ -5296,7 +5936,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, and k (for the compression index of sparse matrics).
+                Legal values are a, b, and k (for the compression index of sparse matrices).
             wave_size: integer that holds the wave size for the requested conversion
                 function. gfx9 only supports wave64.
 
@@ -5474,7 +6114,7 @@ class InstCalcGfx9(InstCalc):
 
         Args:
             matrix: string that contains the name of the matrix
-                Legal values are a, b, c, d, and k (for the compression index of sparse matrics).
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
 
         Returns:
             A string which contains the equation to calculate the block held by a particular
@@ -5505,7 +6145,9 @@ class InstCalcGfx9(InstCalc):
         super()._print_execution_statistics(cu_name)
 
     def _print_register_to_element_eqn(self, print_block: bool = True,
-                                       wave_size: Optional[int] = None) -> None:
+                                       wave_size: Optional[int] = None,
+                                       max_a_lane: Optional[int] = None,
+                                       max_b_lane: Optional[int] = None) -> None:
         """ Prints equation to map register+lane to matrix element.
 
         Print out simple equations for mapping a register and its lane to the element in the
@@ -5521,6 +6163,10 @@ class InstCalcGfx9(InstCalc):
             print_block: True if this equation should print information about blocks
             wave_size: integer that holds the wave size for the requested conversion
                 function. gfx9 only supports wave64.
+            max_a_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for A and K matrices.
+            max_b_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for B matrices.
         """
         super()._print_register_to_element_eqn(print_block)
 
@@ -5546,7 +6192,7 @@ class InstCalcGfx11(InstCalc):
         Checks whether the matrix and lane being requested are legal for indexing into the
         requested matrix. Callers should use this to ensure that the register is within the
         bounds of the matrix. In addition, ensure that the requested lane is within the
-        current wave_width settings for this instrucion + gfx 11 architecture
+        current wave_width settings for this instruction + gfx 11 architecture
 
         Args:
             matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
@@ -5609,7 +6255,7 @@ class InstCalcGfx11(InstCalc):
                 hold the element
             Tuple: (register holding the matrix entry, lanes within that register)
         """
-        reg = self._get_reg_name(data_size, False, False, 0, 0, k)
+        reg = self._get_reg_name(data_size, False, False, 0, 0, 0, k)
 
         # Odd columns are actually stored 16 lanes later
         lanes_to_ret = []
@@ -5651,7 +6297,7 @@ class InstCalcGfx11(InstCalc):
         rows_per_reg_slot = self.wave_width / 16
         skip_half = 2 if data_size == 16 else 1
         regno = int(skip_half * int(i / rows_per_reg_slot)) + (opsel>>2)
-        reg = self._get_reg_name(data_size, False, False, 0, 0, regno)
+        reg = self._get_reg_name(data_size, False, False, 0, 0, 0, regno)
 
         # Output lanes are 16 elements wide, and depending on the wave size,
         # this ends up meaning we walk over a different number of lanes before
@@ -5754,7 +6400,7 @@ class InstCalcGfx11(InstCalc):
         On some architectures, partial registers (such as a 16b output in a 32b register)
         aren't tightly packed. For example, "lower" or "upper halves may be skipped
         instead of storing two contiguous values, one in the lower and one in the upper.
-        In sucharchitectures and for  certain matrices, the OPSEL value controls whether
+        In such architectures and for  certain matrices, the OPSEL value controls whether
         to use the upper or lower halves.
 
         This function returns the number of slots to print in each register; the rest can
@@ -6006,7 +6652,7 @@ class InstCalcGfx11(InstCalc):
             super()._print_element_to_register_eqn(block, 32)
             super()._print_element_to_register_eqn(block, 64)
         else:
-            super()._print_element_to_register_eqn(block)
+            super()._print_element_to_register_eqn(block, wave_size)
 
     def _reg_lane_to_i_coord_eqn(self, matrix: str,
                                        wave_size: Optional[int] = None) -> str:
@@ -6125,7 +6771,9 @@ class InstCalcGfx11(InstCalc):
         super()._print_register_usage(wave_sizes)
 
     def _print_register_to_element_eqn(self, print_block: bool = False,
-                                       wave_size: Optional[int] = None) -> None:
+                                       wave_size: Optional[int] = None,
+                                       max_a_lane: Optional[int] = None,
+                                       max_b_lane: Optional[int] = None) -> None:
         """ Prints equation to map register+lane to matrix element.
 
         Print out simple equations for mapping a register and its lane to the element in the
@@ -6137,10 +6785,1088 @@ class InstCalcGfx11(InstCalc):
             print_block: True if this equation should print information about blocks
             wave_size: integer that holds the wave size for the requested conversion
                 function. gfx11 supports wave32 and wave64.
+            max_a_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for A and K matrices.
+            max_b_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for B matrices.
         """
         if wave_size is None:
             super()._print_register_to_element_eqn(print_block, 32)
             super()._print_register_to_element_eqn(print_block, 64)
+        else:
+            super()._print_register_to_element_eqn(print_block)
+
+class InstCalcGfx12(InstCalc):
+    """ Calculator for matrix multiplication instruction details on gfx12 architecture.
+
+    This is a child class of the InstCalcGfx11 class, because gfx12/RDNA4 shares many, but not
+    all, of its calculations with gfx11/RDNA3.
+
+    Attributes:
+        arch_name: string that holds the accelerator architecture's name
+        inst_name: string holding the mnemonic of the instruction that will be used in calculations
+        inst_info: MatrixInstruction holding the details of the instruction used in calculations
+        wave_width: Some architectures allow wavefronts of various widths, and these widths can
+            affect the resulting calculations. This integer holds the width that will be used for
+            further calculations.
+    """
+    def check_valid_reg_lane(self, matrix: str, register: int, lane: int) -> bool:
+        """ Checks if the register and lane being used for calculation are legal
+
+        Checks whether the matrix and lane being requested are legal for indexing into the
+        requested matrix. Callers should use this to ensure that the register is within the
+        bounds of the matrix. In addition, ensure that the requested lane is within the
+        current wave_width settings for this instruction + gfx 11 architecture
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+                for the compression index matrix in sparse matrix ops
+            register: Integer of the register number being requested, starting from 0
+            lane: Integer of the lane being requested, starting from 0
+
+        Returns:
+            True if the register and lane contain data for this matrix on the current instruction
+            False if the register and lane do not contain data for this matrix in this instruction
+        """
+        if (lane < 0 or lane >= (self.wave_width)):
+            return False
+        num_gprs = self._get_instruction_num_gprs(matrix)
+        if (register < 0 or register > num_gprs):
+            return False
+        # V_SWMMAC_I32_16X16X32_IU4 only uses 32 lanes for A matrix and compression
+        # indices when in wave64 mode
+        # V_SWMMAC_I32_16X16X32_IU4 only uses 32 lanes for A and B matrices when in
+        # wave64 mode
+        if (self.inst_name.upper() == 'V_SWMMAC_I32_16X16X32_IU4' and
+                matrix in ('a', 'k') and self.wave_width == 64 and lane > 31):
+            return False
+        if (self.inst_name.upper() == 'V_WMMA_I32_16X16X16_IU4' and
+                matrix in ('a', 'b') and self.wave_width == 64 and lane > 31):
+            return False
+        return True
+
+    def __get_input_reg(self, matrix:str, k: int) -> str:
+        """ Calculates a matrix's input register based on coordinates.
+
+        For gfx12, calculates the input register for an instruction's input based on its
+        parameters. Only works on the A and B matrices.
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b'
+            k: integer location within the input matrix's "inner" dimension
+                For A matrices, this is the desired column
+                For B matrices, this is the desired row
+
+        Returns:
+            Based on the matrix and requested coordinates, return the register name that
+            holds the element, in a string of the format V#.[bits]
+        """
+        check_matrix_support(matrix, ('a', 'b'), self.__class__.__name__)
+        data_size = get_data_size(self.inst_info['in_type'])
+        sparse = self.inst_info['sparse']
+        register = 0
+        base_bits = -1
+        bits_size = data_size
+        if sparse:
+            if matrix.lower() == 'a': # Sparse matrix A
+                if self.wave_width == 32:
+                    if data_size == 16:
+                        register = 2 * int(k / 16) + (int(k / 4) % 2)
+                    elif data_size == 8:
+                        register = int(k / 8) % 2
+                    else: # data_size == 4
+                        if self.inst_info['k'] == 64:
+                            register = int(k / 16) % 2
+                        # else k == 32 and register = 0
+                else: # self.wave_width == 64
+                    if data_size == 16:
+                        register = int(k / 4) % 2
+                    # else data_size == 8 or data_size == 4 and register = 0
+                # 16-bit input with sparse A matrix uses whole reg for 4 inputs
+                if data_size != 16:
+                    base_bits = 2*data_size
+                    base_bits *= (int(k / 4) % int(16/data_size))
+                    bits_size *= 2
+            else: # Dense matrix B for sparse instruction
+                if self.wave_width == 32:
+                    if data_size == 16:
+                        register = 4 * int(k / 16) + (int(k / 2) % 4)
+                    elif data_size == 8:
+                        register = int(k / 4) % 4
+                    else: # data_size == 4
+                        if self.inst_info['k'] == 32:
+                            register = int(k / 8) % 2
+                        else: # Matrix K == 64
+                            register = int(k / 8) % 4
+                else: # self.wave_width == 64
+                    if data_size == 16:
+                        register = int(k / 2) % 4
+                    elif data_size == 8:
+                        register = int(k / 4) % 2
+                    else: # data_size == 4
+                        if self.inst_info['k'] != 32: # K == 64
+                            register = int(k / 8) % 2
+                        # else K == 32 and register = 0
+                base_bits = data_size * (k % int(32/data_size))
+        else: # non-sparse A or B
+            if self.wave_width == 32:
+                if data_size == 16:
+                    register = 2 * int(k/8) + (int(k / 2) % 2)
+                elif data_size == 8:
+                    register = int(k / 4) % 2
+                elif self.inst_info['k'] == 32: # data_size == 4 and K width is 32
+                    register = int(k / 8) % 2
+                else:
+                    register = 0
+            else: # self.wave_width == 64
+                if data_size == 16:
+                    register = int(k / 2) % 2
+                # else data-size == 8 or data_size == 4 and register = 0
+            base_bits = data_size * (k % int(32/data_size))
+        ret_str = f'v{register}'
+        if base_bits != -1:
+            ret_str = f'{ret_str}.[{base_bits+bits_size-1}:{base_bits}]'
+        return ret_str
+
+    def get_num_compression_sets(self) -> int:
+        """ Returns the number of compression index sets that an instruction has
+
+        Returns:
+            An integer that contains the number of compression index sets that an
+                instruction allows for the given configuration
+        """
+        data_size = get_data_size(self.inst_info['in_type'])
+        num_sets = 0
+        if self.inst_info['sparse']:
+            if self.wave_width == 32:
+                if data_size == 4 and self.inst_info['k'] == 64:
+                    num_sets = 1
+                else:
+                    num_sets = 2
+            else:
+                if data_size in (8, 16):
+                    num_sets = 4
+                else:
+                    num_sets = 2
+        return num_sets
+
+    def _get_num_compression_bit_offset(self, opsel: int) -> int:
+        """ Returns the bit offset of the first compression index, based on instruction modifiers
+
+        Args:
+            opsel: The OPSEL modifier for the matrix instruction
+
+        Returns:
+            An integer that contains the starting bit of this set of compression indices
+        """
+        num_sets = self.get_num_compression_sets()
+        per_opsel_offset = 0
+        if num_sets > 0:
+            per_opsel_offset = int(32 / num_sets)
+        return opsel * per_opsel_offset
+
+    def __get_compression_bits(self, matrix:str, k: int, opsel: int) -> str:
+        """ Calculates the bit locations for a compression entry based on coordinates.
+
+        For gfx12, calculates the bits in the compression index VGPR based on the
+        instruction and the input matrix coordinates.
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+            k: integer location of the A matrix column for this compression index
+            opsel: integer value of the instruction's OPSEL modifier
+
+        Returns:
+            Based on the requested coordinates, return the bits in the compression VGPR
+            that hold the compression index, in a string of the format [bits]
+        """
+        check_matrix_support(matrix, ('k', ), self.__class__.__name__)
+        data_size = get_data_size(self.inst_info['in_type'])
+        # register is always 0
+        if self.wave_width == 32:
+            if data_size == 16:
+                base_bits = 8 * int(k/16) + 4 * (int(k/4) % 2)
+            elif data_size == 8 or self.inst_info['k'] == 32:
+                # 8-bit type or 4-bit type with matrix K == 32
+                base_bits = 4 * (int(k / 4) % 4)
+            else:
+                # data_size == 4 and matrix K == 64
+                base_bits = 4 * (int(k / 4) % 8)
+        else:
+            if data_size in (8, 16):
+                base_bits = 4 * (int(k / 4) % 2)
+            else:
+                # data_size == 4
+                base_bits = 4 * (int(k / 4) % 4)
+        base_bits += self._get_num_compression_bit_offset(opsel)
+        return f'[{base_bits+3}:{base_bits}]'
+
+    def __get_input_lane(self, matrix: str, i: int, k: int) -> int:
+        """ Calculates the lane for an input matrix based on coordinates.
+
+        For gfx12, calculates the lane for an instruction's matrix based on its parameters.
+        Only works on the A and B matrices, or for the compression index K.
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+            i: integer location within the input matrix's "outer" dimension
+                For A and K matrices, this is the desired row
+                For B matrices, this is the desired column
+            k: integer location within the input matrix's "inner" dimension
+                For A and K matrices, this is the desired column
+                For B matrices, this is the desired row
+            data_size: integer size of the input data, in bits
+
+        Returns:
+            Based on the matrix and requested coordinates, return the register name that
+            holds the element, in a string of the format V#.[bits]
+
+        Takes the instruction info and matrix, return a string with an equation that lets a user
+        calculate the lane that holds a particular entry in the matrix from its i/j/k/block
+        coordinates.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k.
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx12 supports wave64 and wave32.
+
+        Returns:
+            String that contains the simple formula mapping coordinates to lanes
+        """
+        check_matrix_support(matrix, ('a', 'b', 'k'), self.__class__.__name__)
+        data_size = get_data_size(self.inst_info['in_type'])
+        sparse = self.inst_info['sparse']
+        ret_val = 0
+
+        if sparse:
+            if self.wave_width == 32:
+                if data_size == 16:
+                    ret_val = 16 * (int(k / 8) % 2) + i
+                elif data_size == 8 or self.inst_info['k'] == 32:
+                    # 8-bit type or 4-bit type with matrix K == 32
+                    ret_val = 16 * int(k / 16) + i
+                else:
+                    # data_size == 4 and matrix K == 64
+                    ret_val = 16 * int(k / 32) + i
+            else: # self.wave_width == 64
+                if data_size == 16:
+                    ret_val = 16 * int(k / 8) + i
+                elif data_size == 8 or self.inst_info['k'] == 32:
+                    if data_size == 4 and matrix.lower() in ('a', 'k'):
+                        # 4-bit K == 32 sparse A can only use 32 of 64 lanes
+                        ret_val = 16 * int(k / 16) + i
+                    else:
+                        # 8-bit type or B matrix for 4-bit type with matrix K == 32
+                        ret_val = 32 * (int(k / 8) % 2) + 16 * int(k / 16) + i
+                else:
+                    # data_size == 4 and matrix K == 64
+                    ret_val = 32 * (int(k / 16) % 2) + 16 * int(k / 32) + i
+        else:
+            if self.wave_width == 32:
+                if data_size == 16:
+                    ret_val = 16 * (int(k / 4) % 2) + i
+                elif data_size == 8 or self.inst_info['k'] == 16:
+                    # 8-bit type, or 4-bit type with matrix K == 16
+                    ret_val = 16 * int(k / 8) + i
+                else: # data_size == 4 and matrix K == 32
+                    ret_val = 16 * int(k / 16) + i
+            else: # self.wave_width == 64
+                if data_size == 16:
+                    ret_val = 32 * (int(k / 8) % 2) + 16 * (int(k / 4) % 2) + i
+                elif data_size == 8:
+                    ret_val = 32 * (int(k / 4) % 2) + 16 * (int(k / 8) % 2) + i
+                elif self.inst_info['k'] == 16:
+                    # data_size == 4 and matrix K == 16
+                    # Only half of the wave64 is enabled in this case
+                    ret_val = 16 * int(k / 8) + i
+                else: # data_size == 4 and matrix K == 32
+                    ret_val = 32 * (int(k / 8) % 2) + 16 * (int(k / 16) % 2) + i
+        return ret_val
+
+    def __get_input_reg_lanes(self, matrix: str, i: int, k: int,
+                              opsel: int) -> Tuple[str, List[int]]:
+        """ Calculates a matrix's input register and lane number based on coordinates.
+
+        For gfx12, calculates the input register and the lane within that register for an
+        instruction based on its parameters.
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b', or 'k'
+            i: integer location within the input matrix's "outer" dimension
+                For A and K matrices, this is the desired row
+                For B matrices, this is the desired column
+            k: integer location within the input matrix's "inner" dimension
+                For A and K matrices, this is the desired column
+                For B matrices, this is the desired row
+            opsel: integer value of the instruction's OPSEL modifier
+
+        Returns:
+            Based on the matrix and requested coordinates, return two things in a tuple:
+            1. String register name that holds the element, in the format V#.[bits]
+            2. List of integers, containing the lane numbers within that register that
+                hold the element
+            Tuple: (register holding the matrix entry, lanes within that register)
+        """
+        check_matrix_support(matrix, ('a', 'b', 'k'), self.__class__.__name__)
+        reg_string = ""
+        if matrix.lower() == 'k':
+            reg_string = f'v0.{self.__get_compression_bits(matrix, k, opsel)}'
+        else: # matrix.lower() == 'a' or 'b'
+            reg_string = self.__get_input_reg(matrix, k)
+        lane = self.__get_input_lane(matrix, i, k)
+        return (reg_string, [lane])
+
+    def __get_output_reg_lanes(self, i: int, j: int) -> Tuple[str, List[int]]:
+        """ Calculates a matrix's output register and lane number based on coordinates.
+
+        For gfx12, calculates the output register and the lane within that register for
+        an instruction based on its parameters.
+
+        Args:
+            i: integer location within the output matrix's rows
+            j: integer location within the output matrix's columns
+
+        Returns:
+            Based on the matrix and requested coordinates, return two things in a tuple:
+            1. String register name that holds the element, in the format V#.[bits]
+            2. List of integers, containing the lane numbers within that register that
+                hold the element
+            Tuple: (register holding the matrix entry, lanes within that register)
+        """
+        data_size = get_data_size(self.inst_info['out_type'])
+        register = ""
+        lane = 0
+        if self.wave_width == 32:
+            if data_size == 32:
+                register = f'v{i % 8}'
+            else: # data_size == 16
+                base_bits = 16 * (i % 2)
+                register = f'v{int(i / 2) % 4}.[{base_bits + 15}:{base_bits}]'
+            lane = 16 * int(i / 8) + j
+        else: # self.wave_width == 64
+            if data_size == 32:
+                register = f'v{i % 4}'
+            else: # data_size == 16
+                base_bits = 16 * (i % 2)
+                register = f'v{int(i / 2) % 2}.[{base_bits + 15}:{base_bits}]'
+            lane = 32 * (int(i / 4) % 2) + 16 * int(i / 8) + j
+        return (register, [lane])
+
+    def _get_reg_lanes(self, matrix: str, i: int, j: int, k: int, block: int, cbsz: int,
+                       abid: int, blgp: int, opsel: int) -> Tuple[str, str, List[int]]:
+        """ Calculates a matrix's register and lane number based on coordinates.
+
+        For the target architecture and the instruction set up in this class's init
+        function, this function calculates the register and lane that hold a requested
+        matrix entry in a requested matrix. This location information can vary based on
+        per-instruction modifiers, so those are all input arguments.
+
+        block, cbsz, abid, and blgp are ignored by this function, because gfx12 does not use
+        these instruction modifiers.
+
+        Args:
+            matrix: String indicating the matrix to query: 'a', 'b', 'c', 'd', or 'k'
+            i: integer coordinate for the query of the matrix row for A, C, D, & K matrices
+            j: integer coordinate for the query of the matrix column for the B, C, & D matrices
+            k: integer coordinate for the query of the A & K column or B row
+            block: integer coordinate for the block to query
+            cbsz: integer value of the instruction's CBSZ modifier
+            abid: integer value of the instruction's ABID modifier
+            blgp: integer value of the instruction's BLGP modifier
+            opsel: integer value of the instruction's OPSEL modifier
+
+        Returns:
+            Based on the matrix and requested coordinates, return three things in a tuple:
+            1. String requested element name, in the format A[i][k], B[k][j], or C[i][j]
+            2. String register name that holds the element, in the format V#.[bits]
+            3. List of integers, containing the lane numbers within that register that
+                hold the element
+            Tuple: (matrix entry, register holding that entry, lanes within that register)
+        """
+        del block, cbsz, abid, blgp # Unused in gfx12
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
+        if matrix.lower() in ('a', 'k'):
+            (reg, lanes) = self.__get_input_reg_lanes(matrix, i, k, opsel)
+            element_name = f"{matrix.upper()}[{i}][{k}]"
+        elif matrix.lower() == 'b':
+            (reg, lanes) = self.__get_input_reg_lanes(matrix, j, k, opsel)
+            element_name = f"{matrix.upper()}[{k}][{j}]"
+        else: # (matrix.lower() == 'c' or matrix.lower() == 'd'):
+            (reg, lanes) = self.__get_output_reg_lanes(i, j)
+            element_name = f"{matrix.upper()}[{i}][{j}]"
+        return (element_name, reg, lanes)
+
+    def _calculate_num_regnos_to_print(self, matrix: str, gpr_ratio: float) -> int:
+        """ Calculates the number of register slots to print for this matrix & instruction.
+
+        On some architectures, partial registers (such as a 16b output in a 32b register)
+        aren't tightly packed. For example, "lower" or "upper halves may be skipped
+        instead of storing two contiguous values, one in the lower and one in the upper.
+        In such architectures and for  certain matrices, the OPSEL value controls whether
+        to use the upper or lower halves.
+
+        This function returns the number of slots to print in each register; the rest can
+        be skipped.
+
+        In gfx12, sparse matrix values need to print twice as many "regnos" because the
+        register printing function needing to print twice as much data per register
+        However, for the compression index matrix 'k' in wave64, this is not needed
+        because each compression index is spread over more lanes. So there are half as
+        many regnos to print per lane.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, and d.
+            gpr_ratio: the number of regnos in each GPR
+
+        Returns:
+            Integer indicating how many of the regnos in each GPR to print
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
+        """
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
+        num_regnos_to_print = super()._calculate_num_regnos_to_print(matrix, gpr_ratio)
+        if (matrix.lower() == 'k' and self.wave_width == 32 and self.inst_info['k'] == 64):
+            num_regnos_to_print *= 2
+        return num_regnos_to_print
+
+    def calculate_register_layout(self, matrix: str, requested_output: str,
+                                  negate: Dict[str, bool], cbsz: int, abid: int, blgp: int,
+                                  opsel: int, transpose: bool, print_blocks: bool = False) -> None:
+        """ Displays the registers+lanes for an entire matrix.
+
+        Calculate and display the registers and lanes for an entire input or
+        output matrix. Displays the matrix formatted as its rows and columns,
+        with the registers and their lanes displayed in a tabular format.
+        Can optionally print this tabular format as a CSV, markdown, or asciidoc
+        for other processing. Can also choose to transpose the matrix to visually
+        show rows as columns and vice versa.
+        The registers are displayed as: Va{b}.c:
+            - a is the register number
+            - b is the lane within that register
+            - c is an optional identifier for sub-Dword parts of the 32 bit register:
+                    [15:0]: the lower 16b of a 32b register
+                    [31:16]: the upper 16b of a 32b register
+                    [7:0]: the least significant 8b of a 32b register
+                    [15:8]: the second-lowest 8b of a 32b register
+                    [23:16]: the second-highest 8b of a 32b register
+                    [31:24]: the most significant 8b of a 32b register
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, or d.
+            requested_output: string that indicates the type of output, from the list of
+                csv, markdown, asciidoc, or grid
+            negate: dictionary of matrix names to bools that indicate whether to
+                negate and absolute-val entries from this matrix.
+            cbsz: integer value of the instruction's CBSZ modifier
+            abid: integer value of the instruction's ABID modifier
+            blgp: integer value of the instruction's BLGP modifier
+            opsel: integer value of the instruction's OPSEL modifier
+            transpose: boolean set to true to cause the matrix to be printed transposed
+            print_blocks: boolean set to true if this architecture and instruction
+                should print the word "Block #" above each block of the matrix
+                gfx12 does not do this by default.
+        """
+        super().calculate_register_layout(matrix, requested_output, negate, cbsz, abid, blgp,
+                                          opsel, transpose, print_blocks)
+
+    def calculate_matrix_layout(self, matrix: str, requested_output: str, negate: Dict[str, bool],
+                                cbsz: int, abid: int, blgp: int, opsel: int, transpose: bool,
+                                contig_values: int = 32) -> None:
+        """ Displays the matrix entries for all of the registers+lanes used by an instruction.
+
+        Calculate and display the matrix elements for all register entries and
+        lanes used by the requesting instruction.
+        Displays the registers formatted by register entry (X axis) and wavefront lane
+        (Y axis). The resulting table then shows the MatrixName[col][row] held in
+        that lane's register entry.
+        Can optionally print this tabular format as a CSV, markdown, or asciidoc
+        for other processing. Can also choose to transpose the matrix to visually
+        show rows as columns and vice versa.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, or d.
+            requested_output: string that indicates the type of output, from the list of
+                csv, markdown, asciidoc, or grid
+            negate: dictionary of matrix names to bools that indicate whether to
+                negate and absolute-val entries from this matrix.
+            cbsz: integer value of the instruction's CBSZ modifier
+            abid: integer value of the instruction's ABID modifier
+            blgp: integer value of the instruction's BLGP modifier
+            opsel: integer value of the instruction's OPSEL modifier
+            transpose: boolean set to true to cause the matrix to be printed transposed
+            contig_values: an integer that defines the number of contiguous values of a
+                register that are used to hold unique values of a matrix
+                gfx12's values change depending on the wavefront width in use
+        """
+        contig_values = self.wave_width
+        data_size = get_data_size(self.inst_info['in_type'])
+        K = self.inst_info['k']
+        if data_size == 4 and K == 16:
+            # 4-bit ops with K==16 can only use 32 lanes no matter what
+            contig_values = 32
+        if matrix.lower() in ('a', 'k') and data_size == 4 and K == 32:
+            # k and SparseA for 4-bit ops with K==32 can only use 32 lanes
+            contig_values = 32
+        super().calculate_matrix_layout(matrix, requested_output, negate, cbsz, abid, blgp, opsel,
+                                        transpose, contig_values)
+
+    def _get_instruction_num_gprs(self, matrix: str, in_lanes: Optional[int] = None,
+                                  out_size: Optional[int] = None) -> int:
+        """ Calculates the number of GPRs needed to hold a matrix.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k.
+            in_lanes: an integer that defines the number of contiguous lanes that are used to hold
+                values of a matrix. On gfx12, this ends up being the wave width.
+            out_size: The number of bits used to hold output values for this instruction
+                For instance: some devices may store 16b values into either the low or high
+                half of a 32b output register. If this argument is not passed in, the function
+                will initialize the value to 32.
+
+        Returns:
+            An integer that defines the number of GPRs needed to hold the requested matrix
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
+        """
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
+        del out_size # Unused in gfx12
+        out_size = get_data_size(self.inst_info['out_type'])
+        # Parent class, gfx11 will always override the in_lanes, and we want to actually pass
+        # the number of lanes through for gfx12, so we want to call its parent directly
+        return super()._get_instruction_num_gprs(matrix, in_lanes, out_size)
+
+    def _print_register_info(self, encoding_name: str = "VOP3P") -> None:
+        """ Prints the encoding and register information for a matrix instruction.
+
+        Prints the encoding and modifier information for the registers used by a
+        matrix multiplication instruction on a particular architecture.
+        Architecture matters, because different architectures support different
+        encodings and matrix modifier fields.
+
+        Args:
+            encoding_name: String containing the name of the encoding format for the
+                current architecture
+                gfx12 defaults to "VOP3P".
+        """
+        super()._print_register_info(encoding_name)
+        print("    Register modifiers:")
+        print(f"        OPSEL supported: {self.inst_info['sparse']}")
+        print(f"        NEG bits supported: {self.inst_info['neg']}")
+
+    def _coord_to_input_reg_eqn(self, matrix: str, wave_size: Optional[int] = 32) -> str:
+        """ Returns formula for mapping a matrix coordinate to its input register number.
+
+        Takes the instruction info and matrix, return a string with an equation that lets a user
+        calculate the input register that holds a particular entry in the matrix from its
+        i/j/k/block coordinates.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx12 changes register equations for different wave sizes.
+
+        Returns:
+            String that contains the simple formula mapping coordinates to input registers
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
+        """
+        check_matrix_support(matrix, ('a', 'b', 'k'), self.__class__.__name__)
+        data_size = get_data_size(self.inst_info['in_type'])
+        sparse = (matrix.lower() in ('a', 'b') and self.inst_info['sparse'])
+
+        reg_string = "Unknown"
+        bit_string = ""
+        if sparse:
+            if matrix.lower() == 'a': # Sparse matrix A
+                if wave_size == 32:
+                    if data_size == 16:
+                        reg_string = '2 * floor(k / 16) + (floor(k / 4) % 2)'
+                    elif data_size == 8:
+                        reg_string = 'floor(k / 8) % 2'
+                    else: # data_size == 4
+                        if self.inst_info['k'] == 32:
+                            reg_string = '0'
+                        else: # Matrix K == 64
+                            reg_string = 'floor(k / 16) % 2'
+                else: # wave_size == 64
+                    if data_size == 16:
+                        reg_string = 'floor(k / 4) % 2'
+                    else: #data_size == 8 or data_size == 4
+                        reg_string = '0'
+                if data_size != 16:
+                    base_string = f'{2*data_size} * '
+                    base_string += f'(floor(k / 4) % {int(16 / data_size)})'
+                    bit_string = f'{base_string} + {2*data_size-1} : {base_string}'
+            else: # Dense matrix B for sparse instruction
+                if wave_size == 32:
+                    if data_size == 16:
+                        reg_string = '4 * floor(k / 16) + (floor(k / 2) % 4)'
+                    elif data_size == 8:
+                        reg_string = 'floor(k / 4) % 4'
+                    else: # data_size == 4
+                        if self.inst_info['k'] == 32:
+                            reg_string = 'floor(k / 8) % 2'
+                        else: # Matrix K == 64
+                            reg_string = 'floor(k / 8) % 4'
+                else: # wave_size == 64
+                    if data_size == 16:
+                        reg_string = 'floor(k / 2) % 4'
+                    elif data_size == 8:
+                        reg_string = 'floor(k / 4) % 2'
+                    else: # data_size == 4
+                        if self.inst_info['k'] == 32:
+                            reg_string = '0'
+                        else: # Matrix K == 64
+                            reg_string = 'floor(k / 8) % 2'
+                base_string = f'{data_size} * (k % {int(32/data_size)})'
+                bit_string = f'{base_string} + {data_size-1} : {base_string}'
+        elif matrix.lower() == 'k':
+            reg_string = '0'
+            if wave_size == 32:
+                if data_size == 16:
+                    base_string = '8 * floor(k / 16) + 4 * (floor(k / 4) % 2)'
+                elif data_size == 8 or self.inst_info['k'] == 32:
+                    # 8-bit type or 4-bit type with matrix K == 32
+                    base_string = '4 * (floor(k / 4) % 4)'
+                else: # data_size == 4 and matrix K == 64
+                    base_string = '4 * (floor(k / 4) % 8)'
+            else:
+                if data_size in (8, 16):
+                    base_string = '4 * (floor(k / 4) % 2)'
+                else: # data_size == 4
+                    base_string = '4 * (floor(k / 4) % 4)'
+            bit_string = f'{base_string} + 3 : {base_string}'
+        else: # non-sparse A or B
+            if wave_size == 32:
+                if data_size == 16:
+                    reg_string = '2 * floor(k / 8) + (floor(k / 2) % 2)'
+                elif data_size == 8:
+                    reg_string = 'floor(k / 4) % 2'
+                elif self.inst_info['k'] == 32: # data_size == 4 and K width is 32
+                    reg_string = 'floor(k / 8) % 2'
+                else:
+                    reg_string = '0'
+            else: # wave_size == 64
+                if data_size == 16:
+                    reg_string = 'floor(k / 2) % 2'
+                else: # data_size == 8 or data_size == 4
+                    reg_string = '0'
+            base_string = f'{data_size} * (k % {int(32/data_size)})'
+            bit_string = f'{base_string} + {data_size-1} : {base_string}'
+        ret_string = reg_string
+        if reg_string != '0':
+            ret_string = '(' + reg_string + ')'
+        if bit_string != '':
+            ret_string += '.[' + bit_string + ']'
+        return ret_string
+
+    def _coord_to_output_reg_eqn(self, wave_size: Optional[int] = 32) -> str:
+        """ Returns formula for mapping a matrix coordinate to its output register number.
+
+        Takes the instruction info and matrix, return a string with an equation that lets a user
+        calculate the output register that holds a particular entry in the matrix from its
+        i/j/k/block coordinates.
+
+        Args:
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx12 changes register equations for different wave sizes.
+
+        Returns:
+            String that contains the simple formula mapping coordinates to output registers
+        """
+        data_size = get_data_size(self.inst_info['out_type'])
+
+        ret_string = "Unknown"
+        if wave_size == 32:
+            if data_size == 32:
+                ret_string = 'i % 8'
+            else: # data_size == 16
+                ret_string = '(floor(i / 2) % 4).[16 * (i % 2) + 15 : 16 * (i % 2)]'
+        else: # wave_size == 64
+            if data_size == 32:
+                ret_string = 'i % 4'
+            else: # data_size == 16
+                ret_string = '(floor(i / 2) % 2).[16 * (i % 2) + 15 : 16 * (i % 2)]'
+        return ret_string
+
+    def _coord_to_lane_eqn(self, matrix: str, wave_size: Optional[int] = 32) -> str:
+        """ Returns formula for mapping a matrix coordinate to its wavefront lane.
+
+        Takes the instruction info and matrix, return a string with an equation that lets a user
+        calculate the lane that holds a particular entry in the matrix from its i/j/k/block
+        coordinates.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, or k.
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx12 supports wave64 and wave32.
+
+        Returns:
+            String that contains the simple formula mapping coordinates to lanes
+        """
+        check_matrix_support(matrix, ('a', 'b', 'c', 'd', 'k'), self.__class__.__name__)
+        sparse = (matrix.lower() in ('a', 'b', 'k') and self.inst_info['sparse'])
+        ret_string = "Unknown"
+        if sparse:
+            data_size = get_data_size(self.inst_info['in_type'])
+            matrix_index = 'j' if matrix.lower() == 'b' else 'i'
+            if wave_size == 32:
+                if data_size == 16:
+                    ret_string = f"16 * (floor(k / 8) % 2) + {matrix_index}"
+                elif data_size == 8 or self.inst_info['k'] == 32:
+                    # 8-bit type or 4-bit type with matrix K == 32
+                    ret_string = f"16 * floor(k / 16) + {matrix_index}"
+                else:
+                    # data_size == 4 and matrix K == 64
+                    ret_string = f"16 * floor(k / 32) + {matrix_index}"
+            else: # wave_size == 64
+                if data_size == 16:
+                    ret_string = f"16 * floor(k / 8) + {matrix_index}"
+                elif data_size == 8 or self.inst_info['k'] == 32:
+                    if data_size == 4 and matrix.lower() in ('a', 'k'):
+                        # 4-bit K == 32 sparse A can only use 32 of 64 lanes
+                        ret_string = f"(16 * floor(k / 16) + {matrix_index}"
+                    else:
+                        # 8-bit type or B matrix for 4-bit type with matrix K == 32
+                        ret_string = "32 * (floor(k / 8) % 2) + 16 * "
+                        ret_string += f"floor(k / 16) + {matrix_index}"
+                else:
+                    # data_size == 4 and matrix K == 64
+                    ret_string = f"32 * (floor(k / 16) % 2) + 16 * floor(k / 32) + {matrix_index}"
+        else:
+            if matrix.lower() in ('a', 'b'): # non-sparse A or B
+                data_size = get_data_size(self.inst_info['in_type'])
+                matrix_index = 'i' if matrix.lower() == 'a' else 'j'
+                if wave_size == 32:
+                    if data_size == 16:
+                        ret_string = f"16 * (floor(k / 4) % 2) + {matrix_index}"
+                    elif data_size == 8 or self.inst_info['k'] == 16:
+                        # 8-bit type, or 4-bit type with matrix K == 16
+                        ret_string = f"16 * floor(k / 8) + {matrix_index}"
+                    else: # data_size == 4 and matrix K == 32
+                        ret_string = f"16 * floor(k / 16) + {matrix_index}"
+                else: # wave_size == 64
+                    if data_size == 16:
+                        ret_string = '32 * (floor(k / 8) % 2) + 16 * (floor(k / 4) % 2) + '
+                        ret_string += f"{matrix_index}"
+                    elif data_size == 8:
+                        ret_string = '32 * (floor(k / 4) % 2) + 16 * (floor(k / 8) % 2) + '
+                        ret_string += f"{matrix_index}"
+                    elif self.inst_info['k'] == 16:
+                        # data_size == 4 and matrix K == 16
+                        # Only half of the wave64 is enabled in this case
+                        ret_string = f"16 * floor(k / 8) + {matrix_index}"
+                    else: # data_size == 4 and matrix K == 32
+                        ret_string = '32 * (floor(k / 8) % 2) + 16 * (floor(k / 16) % 2) + '
+                        ret_string += f"{matrix_index}"
+            else: # C or D
+                if wave_size == 32:
+                    ret_string = '16 * floor(i / 8) + j'
+                else: # wave_size == 64
+                    ret_string = '32 * (floor(i / 4) % 2) + 16 * floor(i / 8) + j'
+        return ret_string
+
+    def _reg_lane_to_block_eqn(self, matrix: str) -> str:
+        """ Returns equation to map register+lane to block.
+
+        Return a string that can be used to quickly calculate how to go from a register and
+        lane to the block of the input or output matrix. Targets a particular instruction,
+        and does not handle modifiers.
+
+        Args:
+            matrix: string that contains the name of the matrix
+
+        Returns:
+            A blank string, because there are no blocks in gfx12
+        """
+        del matrix # Unused in gfx12
+        return ""
+
+    def _print_element_to_register_eqn(self, block: str = "",
+                                       wave_size: Optional[int] = None) -> None:
+        """ Prints formula for matrix entry to GPR and lane mapping.
+
+        Prints out the simple formulae to calculate the the mapping of a matrix element to its
+        register and lane.
+
+        Will always print A[], B[], and D[]. If the instruction allows C[] matrices, then it will
+        print D[] as "C or D[i][j]".
+
+        Args:
+            block: string that contains text to place in the matrix entry map for blocks
+                For instance, gfx12 does not uses blocks, so by default this function passes an
+                empty string, to print an entry as A[i][k]
+            wave_size: integer that contains the requested wave size to use for printing the
+                formula. gfx12 supports two different wave sizes, and if this optional value is
+                not passed in, we will print both
+        """
+        if wave_size is None:
+            super()._print_element_to_register_eqn(block, 32)
+            super()._print_element_to_register_eqn(block, 64)
+        else:
+            super()._print_element_to_register_eqn(block, wave_size)
+
+    def _reg_lane_to_i_coord_eqn(self, matrix: str,
+                                       wave_size: Optional[int] = 32) -> str:
+        """ Returns equation to map register+lane to i index.
+
+        Takes instruction info and returns a string containing an equation which lets users
+        calculate the i coordinate for the A, C, or D matrices.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, c, d, or k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx12 supports wave64 and wave32.
+
+        Returns:
+            A string which contains the equation to calculate the i coordinate for
+            an input matrix held by a particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
+        """
+        check_matrix_support(matrix, ('a', 'c', 'd', 'k'), self.__class__.__name__)
+        ret_string = "Unknown"
+        data_size = get_data_size(self.inst_info['out_type'])
+
+        if matrix.lower() in ('a', 'k'):
+            ret_string = super()._reg_lane_to_i_coord_eqn(matrix, wave_size)
+        else:
+            # C or D
+            if wave_size == 32:
+                if data_size == 32:
+                    ret_string = "8 * floor(lane / 16) + GPR_num"
+                else: # data_size == 16
+                    ret_string = "8 * floor(lane / 16) + 2 * GPR_num + floor(GPR_bits / 16)"
+            else: # wave_size == 64
+                if data_size == 32:
+                    ret_string = "8 * (floor(lane / 16) % 2) + 4 * floor(lane / 32) + GPR_num"
+                else: # data_size == 16
+                    ret_string = "8 * (floor(lane / 16) % 2) + 4 * floor(lane / 32) + "
+                    ret_string += "2 * GPR_num + floor(GPR_bits / 16)"
+        return ret_string
+
+    def _reg_lane_to_k_coord_eqn(self, matrix: str,
+                                 wave_size: Optional[int] = 32) -> str:
+        """ Returns equation to map register+lane to k index.
+
+        Takes instruction info and a target matrix, and returns a string containing an
+        equation which lets users calculate the k coordinate based on the register and lane.
+        Targets a particular instruction, and does not handle modifiers.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, and k (for the compression index of sparse matrices).
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx12 supports wave64 and wave32.
+
+        Returns:
+            A string which contains the equation to calculate the k coordinate held by a
+            particular register and lane combination
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
+        """
+        check_matrix_support(matrix, ('a', 'b', 'k'), self.__class__.__name__)
+        ret_string = "Unknown"
+        data_size = get_data_size(self.inst_info['in_type'])
+
+        if self.inst_info['sparse']:
+            if matrix == 'a':
+                if data_size == 16:
+                    start_point = ""
+                    if wave_size == 32:
+                        start_point = "16 * floor(GPR_num / 2) + "
+                    start_point += "8 * floor(lane / 16) + "
+                    start_point += "4 * (GPR_num % 2)"
+                elif data_size == 8 or self.inst_info['k'] == 32:
+                    if wave_size == 32:
+                        start_point = "16 * floor(lane / 16) + "
+                        if data_size == 8:
+                            start_point += "8 * GPR_num + "
+                    else: # wave_size == 64
+                        start_point = "16 * (floor(lane / 16) % 2) + "
+                        if data_size == 8:
+                            start_point += "8 * floor(lane / 32) + "
+                    start_point += f"4 * floor(GPR_bits / {int(2*data_size)})"
+                else: # data_size == 4
+                    if wave_size == 32:
+                        start_point = "32 * floor(lane / 16) + "
+                        start_point += "16 * GPR_num + "
+                    else: # wave_size == 64
+                        start_point = "32 * (floor(lane / 16) % 2) + "
+                        start_point += "16 * floor(lane / 32) + "
+                    start_point += "4 * floor(GPR_bits / 8)"
+                end_point = f"({start_point} + 3)"
+                ret_string = f"{end_point}\nthrough\n{start_point}"
+            elif matrix == 'k':
+                if data_size == 16:
+                    start_point = ""
+                    if wave_size == 32:
+                        start_point = "16 * (floor(GPR_bits / 8) % 2) + "
+                    start_point += "8 * floor(lane / 16) + "
+                    start_point += "4 * (floor(GPR_bits / 4) % 2)"
+                elif data_size == 8:
+                    if wave_size == 32:
+                        start_point = "16 * floor(lane / 16) + "
+                    else: # wave_size == 64:
+                        start_point = "16 * (floor(lane / 16) % 2) + "
+                        start_point += "8 * floor(lane / 32) + "
+                    start_point += "4 * (floor(GPR_bits / 4) % 4)"
+                elif self.inst_info['k'] == 32:
+                    start_point = "16 * floor(lane / 16) + "
+                    start_point += "4 * floor(GPR_bits / 4) % 4)"
+                else: #data_size == 4 and matrix K == 64
+                    if wave_size == 32:
+                        start_point = "32 * floor(lane / 16) + "
+                    else: # wave_size == 64:
+                        start_point = "32 * (floor(lane / 16) % 2) + "
+                        start_point += "16 * floor(lane / 32) + "
+                    start_point += "4 * (floor(GPR_bits / 4) % 8)"
+                prefix=""
+                end_point = f"{start_point} + 3"
+                if data_size == 4 and self.inst_info['k'] == 32 and wave_size == 64:
+                    prefix = "(lanes 0-31 only)\n"
+                ret_string = f"{prefix}{end_point}\nthrough\n{start_point}"
+            else: # matrix is dense B for sparse instruction
+                if data_size == 16:
+                    if wave_size == 32:
+                        ret_string = "16 * floor(GPR_num / 4) + 8 * floor(lane / 16) + "
+                    else: # wave_size == 64
+                        ret_string = "8 * floor(lane / 16) + "
+                    ret_string += "2 * (GPR_num % 4) + floor(GPR_bits / 16)"
+                else:
+                    if data_size == 8:
+                        if wave_size == 32:
+                            ret_string = "16 * floor(lane / 16) + "
+                        else: # wave_size == 64
+                            ret_string = "16 * (floor(lane / 16) % 2) + "
+                        if data_size == 8:
+                            if wave_size == 64:
+                                ret_string += "8 * floor(lane / 32) + "
+                            ret_string += "4 * GPR_num + "
+                    elif self.inst_info['k'] == 32:
+                        if wave_size == 32:
+                            ret_string = "16 * floor(lane / 16) + 8 * GPR_num + "
+                        else: # wave_size == 64
+                            ret_string = "16 * (floor(lane / 16) % 2) + 8 * floor(lane / 32) + "
+                    else: # 4-bit with k == 64
+                        if wave_size == 32:
+                            ret_string = "32 * floor(lane / 16) + "
+                        else: # wave_size == 64
+                            ret_string = "32 * (floor(lane / 16) % 2) + 16 * floor(lane / 32) + "
+                        ret_string += "8 * GPR_num + "
+                    ret_string += f"floor(GPR_bits / {data_size})"
+        else:
+            if data_size == 16:
+                if wave_size == 32:
+                    ret_string = "8 * floor(GPR_num / 2) + 4 * floor(lane / 16) + "
+                else: # wave_size == 64
+                    ret_string = "4 * floor(lane / 16) + "
+                ret_string += "2 * (GPR_num % 2) + floor(GPR_bits / 16)"
+            else:
+                if data_size == 8:
+                    if wave_size == 32:
+                        ret_string = "8 * floor(lane / 16) + 4 * GPR_num + "
+                    else: # wave_size == 64
+                        ret_string = "8 * (floor(lane / 16) % 2) + 4 * floor(lane / 32) + "
+                elif (data_size == 4 and self.inst_info['k'] == 16):
+                    # 4-bit with k == 16 will only use 32 lanes out of 64.
+                    ret_string = "8 * floor(lane / 16) + "
+                else: # 4-bit with k == 32
+                    if wave_size == 32:
+                        ret_string = "16 * floor(lane / 16) + "
+                        ret_string += "8 * GPR_num + "
+                    else:
+                        ret_string = "16 * (floor(lane / 16) % 2) + "
+                        ret_string += "8 * floor(lane / 32) + "
+                ret_string += f"floor(GPR_bits / {data_size})"
+        return ret_string
+
+    def _print_opcode(self, encoding_name: str = "VOP3P") -> None:
+        """ Prints encoding name and VOP3P opcode for an instruction.
+
+        Args:
+            encoding_name: String containing the name of the encoding format for the
+                current architecture; defaults to "VOP3P" in gfx12.
+        """
+        super()._print_opcode(encoding_name)
+
+    def _print_execution_statistics(self, cu_name: str = "WGP") -> None:
+        """ Prints execution statistics for a matrix multiplication instruction.
+
+        Prints the execution statistics, such as computational throughput and co-execution
+        information, for a matrix multiplication instruction on a target architecture.
+        The instruction and architecture are part of the class.
+
+        Args:
+            cu_name: string that contains the name of the compute unit on the target arch
+                Different architectures may use e.g., CU, or WGP, or some other name.
+                Defaults to "WGP" in gfx12.
+        """
+        super()._print_execution_statistics(cu_name)
+
+    def _print_register_usage(self, wave_sizes: Tuple[int, ...] = (32, 64)) -> None:
+        """ Prints the register count for each input and output matrix.
+
+        Prints the number of registers used by each matrix for a matrix multiplication
+        instruction on a target architecture. Some architectures support more than one
+        wavefront size. In that case, print out the register usage for each wavefront size.
+        This is needed because different wavefront sizes can cause different GPR usage for
+        the same matrix size.
+
+        Args:
+            wave_sizes: a tuple of wavefront sizes to use to print this info
+                Defaults to a tuple of integers 32 and 64 in gfx12, because gfx12
+                supports both wave32 and wave64.
+        """
+        super()._print_register_usage(wave_sizes)
+
+    def _print_register_to_element_eqn(self, print_block: bool = False,
+                                       wave_size: Optional[int] = None,
+                                       max_a_lane: Optional[int] = None,
+                                       max_b_lane: Optional[int] = None) -> None:
+        """ Prints equation to map register+lane to matrix element.
+
+        Print out simple equations for mapping a register and its lane to the element in the
+        matrix and block which they hold. These can be used by developers that do not want to
+        set modifiers like CBSZ/ABID or BLGP to quickly unpack values from registers to
+        put them into output matrix locations.
+
+        Args:
+            print_block: True if this equation should print information about blocks
+            wave_size: integer that holds the wave size for the requested conversion
+                function. gfx12 supports wave32 and wave64.
+            max_a_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for A and K matrices.
+            max_b_lane: optional integer that holds the maximum lane that can be used in this
+                instruction for B matrices.
+        """
+        if wave_size is None:
+            super()._print_register_to_element_eqn(print_block, 32)
+            max_a_lane = None
+            max_b_lane = None
+            # V_SWMMAC_I32_16X16X32_IU4 only uses 32 lanes for A matrix and compression
+            # indices when in wave64 mode
+            # V_SWMMAC_I32_16X16X32_IU4 only uses 32 lanes for A and B matrices when in
+            # wave64 mode
+            if self.inst_name.upper() == 'V_SWMMAC_I32_16X16X32_IU4':
+                max_a_lane = 32
+            elif self.inst_name.upper() == 'V_WMMA_I32_16X16X16_IU4':
+                max_a_lane = 32
+                max_b_lane = 32
+            super()._print_register_to_element_eqn(print_block, 64, max_a_lane, max_b_lane)
         else:
             super()._print_register_to_element_eqn(print_block)
 
