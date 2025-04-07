@@ -73,7 +73,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.3"
+VERSION = "1.3.1"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -3325,7 +3325,7 @@ def parse_and_run() -> int:
               file=sys.stderr)
         return -2
 
-    # For gfx9 sparse matrices, a non-zero CBSZ[1:0] causes ABID to choose the compression index
+    # For gfx9 sparse matrices, a zero CBSZ[1:0] causes ABID to choose the compression index
     # set. Technically CBSZ[2] is undefined -- for safety, let us say setting it is illegal.
     # For non-sparse matrices, CBSZ chooses 2^(how many blocks to broadcast into).
     # After that, ABID chooses which block within the 2^(CBSZ) to broadcast to the others.
@@ -3373,9 +3373,7 @@ def parse_and_run() -> int:
                 print("or the D output matrix when '--output-calculation' is set.", file=sys.stderr)
                 return -2
         if inst_info['sparse']:
-            max_abid = 0
-            if int(args.cbsz) > 0:
-                max_abid = calc.get_num_compression_sets() - 1
+            max_abid = calc.get_num_compression_sets() - 1
         else:
             max_abid = int(math.pow(2, int(args.cbsz))-1)
         if int(args.abid) > max_abid:
@@ -3789,7 +3787,7 @@ class InstCalc(metaclass=ABCMeta):
             # more
             this_str += "0"
             # Move the register up by (8 / N) register slots for every value of ABID
-            if k_cbsz != 0:
+            if k_cbsz == 0:
                 regno += int((64 * k_abid) / data_size)
             # Do a floor(regno / 2) to get the base register bits that will hold this register,
             # then multiply by 4 to offset the bits.

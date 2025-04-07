@@ -1146,17 +1146,19 @@ Or they should be placed into the 6th and 7th bits, if this is the second value 
 
 The `--cbsz` and `--abid` modifiers can also affect the output of the compression index.
 Because the VGPR that holds the compression index is 32b long, sparse instructions with 16b inputs only need 1/4 of a register (8 bits per lane) to store the compression index.
-Setting `CBSZ!=0` allows setting ABID to 0, 1, 2, or 3. This allows storing different compression indices in any of the 8b segments.
+Setting `CBSZ==0` allows setting ABID to 0, 1, 2, or 3. This allows storing different compression indices in any of the 8b segments.
+Setting `CBSZ!=0` will cause the ABID field to be ignored, and the low 8 bits of each register will be used (as if `ABID==0`).
 
 Similarly, sparse instructions with 8b inputs only need 1/2 of a register (16 bits per lane) to store the compression indices.
-Setting `CBSZ!=0` allows setting ABID to 0 or 2, which allows choosing the compression indices from the top or bottom half of the register.
+Setting `CBSZ==0` allows setting ABID to 0 or 1, which allows choosing the compression indices from the top or bottom half of the register.
+Setting `CBSZ!=0` will cause the ABID field to be ignored, and the low 16 bits of each register will be used (as if `ABID==0`).
 
 This use of CBSZ and ABID modifiers for SMFMAC instructions prevents their use for broadcasting A\[\] matrix values [in the manner described above](#example-of-using-the-cbsz-and-abid-modifiers-to-change-the-a-matrix-layout).
 
 For example, the following is the same instruction as before, looking for the compression index of the 2nd row and 31st column of V\_SMFMAC\_F32\_16X16X32\_F16 in MI300, but setting CBSZ and ABID such that we are looking the upper-most bits of the compression indices' VGPR.
 
 ```
-$ ./matrix_calculator.py --architecture cdna3 --instruction v_smfmac_f32_16x16x32_f16 --get-register --I-coordinate 2 --K-coordinate 31 --compression --cbsz 1 --abid 3
+$ ./matrix_calculator.py --architecture cdna3 --instruction v_smfmac_f32_16x16x32_f16 --get-register --I-coordinate 2 --K-coordinate 31 --compression --cbsz 0 --abid 3
 Architecture: CDNA3
 Instruction: V_SMFMAC_F32_16X16X32_F16
 K[2][31] = v0{50}.[31:28]
