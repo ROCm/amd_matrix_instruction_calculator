@@ -53,7 +53,7 @@ from os import path
 from re import findall, search, MULTILINE
 from joblib import Parallel, delayed
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 class TestRunner:
     """ Class to run the application under test with a chosen command line, redirect the output
@@ -549,7 +549,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                         max_k_opsel = 0
                 for neg in range(max_neg+1):
                     for cbsz in range(max_cbsz+1):
-                        if (is_sparse and cbsz != 0):
+                        if (is_sparse and max_cbsz != 0):
                             if get_in_bits(r, arch, inst) == 16:
                                 max_abid = 3
                             else:
