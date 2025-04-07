@@ -1158,7 +1158,7 @@ This use of CBSZ and ABID modifiers for SMFMAC instructions prevents their use f
 For example, the following is the same instruction as before, looking for the compression index of the 2nd row and 31st column of V\_SMFMAC\_F32\_16X16X32\_F16 in MI300, but setting CBSZ and ABID such that we are looking the upper-most bits of the compression indices' VGPR.
 
 ```
-$ ./matrix_calculator.py --architecture cdna3 --instruction v_smfmac_f32_16x16x32_f16 --get-register --I-coordinate 2 --K-coordinate 31 --compression --cbsz 1 --abid 3
+$ ./matrix_calculator.py --architecture cdna3 --instruction v_smfmac_f32_16x16x32_f16 --get-register --I-coordinate 2 --K-coordinate 31 --compression --cbsz 0 --abid 3
 Architecture: CDNA3
 Instruction: V_SMFMAC_F32_16X16X32_F16
 K[2][31] = v0{50}.[31:28]
