@@ -73,7 +73,7 @@ except ImportError:
     from typing_extensions import TypedDict
 from tabulate import tabulate
 
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 
 # Dictionary of possible names for the various supported architectures
 dict_isas = {
@@ -3015,7 +3015,7 @@ def get_type_desc(data_type: str) -> str:
     """
     return dict_math_types[data_type]['description']
 
-def check_matrix_support(matrix: str, supported_list: tuple[str, ...], func_name: str) -> None:
+def check_matrix_support(matrix: str, supported_list: Tuple[str, ...], func_name: str) -> None:
     """ Raises a ValueError if the requested matrix is not in the supported list """
     if matrix.lower() not in supported_list:
         err_str = f"Input matrix format {matrix.lower()} is not supported by "
