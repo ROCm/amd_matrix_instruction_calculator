@@ -8,8 +8,9 @@ It also allows users to generate mappings between matrix element and hardware re
 This tool supports the Matrix Fused-Multiply Add (MFMA) and Sparse Matrix Fused Multiply Accumulate (SMFMAC) instructions that are the ISA-level interface to the Matrix Cores within the AMD Instinct MI100, MI200, and MI300 series processors.
 It also supports the Wave Matrix Multiply Accumulate (WMMA) and Sparse Wave Matrix Multiply Accumulate (SWMMAC) instructions that are the ISA-level interface to the AI Accelerators within the AMD Radeon RDNA&trade; 3 and RDNA 4 processors.
 
-This tool offers five options for each matrix multiplication instruction:
+This tool offers six options for each matrix multiplication instruction:
 * Print general information about the instruction, such as its number of registers, computational throughput, and execution options (`--detail-instruction`).
+* Print the VGPR and lane layout for all matrices (A, B, C/D) together in a single view (`--diagram`)
 * Print the register and lane for a user-chosen A\[\], B\[\], C\[\], or D\[\] matrix entry (`--get-register`)
 * Print the A\[\], B\[\], C\[\], or D\[\] matrix entry for a chosen combination of register and lane (`--matrix-entry`)
 * Print the register and lane combinations for an entire A\[\], B\[\], C\[\], or D\[\] matrix (`--register-layout`)
@@ -95,7 +96,8 @@ Command line parameters are case sensitive, but inputs for the command-line para
 ### Querying Matrix Multiplication Instruction Information
 The following option requires both the `--architecture` and `--instruction` parameters to be set.
 
-* `--detail-instruction` (or `-d`): Print detailed information about the chosen matrix multiplication instruction, including its opcode, register usage, and computational throughput.
+* `--detail-instruction` (or `-d`): Print detailed information about the chosen matrix multiplication instruction, including its opcode, register usage, and computational throughput. Also includes the VGPR/lane diagrams for all matrices.
+* `--diagram`: Print the VGPR and lane layout for all matrices (A, B, C/D) in a single view. For sparse instructions, shows A, B, K (compression index), and D matrices. Supports `--csv`, `--markdown`, `--asciidoc`, and `--transpose` formatting options.
 
 ### Choosing the Matrix to Query
 Most of the matrix multiplication instructions in AMD accelerators perform matrix multiplication of the form `D = A * B + C`, where A, B, and C are input matrices and D is an output matrix.

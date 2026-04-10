@@ -3177,6 +3177,8 @@ def parse_and_run() -> int:
                         help='Print register usage or matrix layout as an AsciiDoc table')
     parser.add_argument('--transpose', action='store_true', dest='transpose',
                         help='When displaying a register or matrix layout, transpose the output')
+    parser.add_argument('--diagram', action='store_true', dest='diagram',
+                        help='Print the VGPR and lane layout for all matrices (A, B, C/D)')
     args = parser.parse_args()
 
     if args.print_version:
@@ -3239,6 +3241,18 @@ def parse_and_run() -> int:
         calc.print_instruction_information()
         return 0
 
+    if args.diagram:
+        requested_output = "grid"
+        if args.csv:
+            requested_output = "csv"
+        elif args.md:
+            requested_output = "markdown"
+        elif args.ad:
+            requested_output = "asciidoc"
+        print_arch_inst(arch_to_use, inst_to_use)
+        calc.print_all_matrix_layouts(requested_output, bool(args.transpose))
+        return 0
+
     if args.I_coordinate is None:
         parser.error('"--I-coordinate" argument required.')
     if not args.I_coordinate.isdigit():
@@ -3294,7 +3308,8 @@ def parse_and_run() -> int:
     if options.count(True) != 1:
         print("Please choose " + ("only " if options.count(True) > 1 else "") +
               "one of: '--get-register', '--matrix-entry', " +
-              "'--register-layout', '--matrix-layout', or '--detail-instruction'", file=sys.stderr)
+              "'--register-layout', '--matrix-layout', '--detail-instruction', " +
+              "or '--diagram'", file=sys.stderr)
         return -2
 
     mats = [args.A_matrix, args.B_matrix, args.C_matrix, args.D_matrix, args.compression]
@@ -4700,19 +4715,15 @@ class InstCalc(metaclass=ABCMeta):
                 table_to_print = list(map(list, zip(*table_to_print)))
             print(self.__format_output_table(table_to_print, requested_output))
 
-    def calculate_matrix_layout(self, matrix: str, requested_output: str, negate: Dict[str, bool],
-                                cbsz: int, abid: int, blgp: int, opsel: int, transpose: bool,
-                                contig_values: int = 64) -> None:
-        """ Displays the matrix entries for all of the registers+lanes used by an instruction.
+    def _build_matrix_layout_table(self, matrix: str, requested_output: str,
+                                    negate: Dict[str, bool], cbsz: int, abid: int,
+                                    blgp: int, opsel: int,
+                                    contig_values: int = 64) -> List[List[str]]:
+        """ Builds the matrix layout table without printing it.
 
-        Calculate and display the matrix elements for all register entries and
-        lanes used by the requesting instruction.
-        Displays the registers formatted by register entry (X axis) and wavefront lane
-        (Y axis). The resulting table then shows the MatrixName[col][row] held in
-        that lane's register entry.
-        Can optionally print this tabular format as a CSV, markdown, or asciidoc
-        for other processing. Can also choose to transpose the matrix to visually
-        show rows as columns and vice versa.
+        Builds the table of matrix elements for all register entries and lanes
+        used by the requesting instruction. Returns the table data so it can
+        be printed or composed with other tables.
 
         Args:
             matrix: string that contains the name of the matrix
@@ -4725,9 +4736,11 @@ class InstCalc(metaclass=ABCMeta):
             abid: integer value of the instruction's ABID modifier
             blgp: integer value of the instruction's BLGP modifier
             opsel: integer value of the instruction's OPSEL modifier
-            transpose: boolean set to true to cause the matrix to be printed transposed
             contig_values: an integer that defines the number of contiguous values of a
                 register that are used to hold unique values of a matrix
+
+        Returns:
+            A list of lists of strings representing the table rows (with header).
 
         Raises:
             ValueError: An unsupported matrix was requested.
@@ -4813,10 +4826,93 @@ class InstCalc(metaclass=ABCMeta):
                 deduplicated.append(x)
         deduplicated.sort(key=lambda x: int(x[0]))
         deduplicated.insert(0, header)
-        table_to_print = deduplicated
+        return deduplicated
+
+    def calculate_matrix_layout(self, matrix: str, requested_output: str, negate: Dict[str, bool],
+                                cbsz: int, abid: int, blgp: int, opsel: int, transpose: bool,
+                                contig_values: int = 64) -> None:
+        """ Displays the matrix entries for all of the registers+lanes used by an instruction.
+
+        Calculate and display the matrix elements for all register entries and
+        lanes used by the requesting instruction.
+        Displays the registers formatted by register entry (X axis) and wavefront lane
+        (Y axis). The resulting table then shows the MatrixName[col][row] held in
+        that lane's register entry.
+        Can optionally print this tabular format as a CSV, markdown, or asciidoc
+        for other processing. Can also choose to transpose the matrix to visually
+        show rows as columns and vice versa.
+
+        Args:
+            matrix: string that contains the name of the matrix
+                Legal values are a, b, c, d, and k (for the compression index of sparse matrices).
+            requested_output: string that indicates the type of output, from the list of
+                csv, markdown, asciidoc, or grid
+            negate: dictionary of matrix names to bools that indicate whether to
+                negate and absolute-val entries from this matrix
+            cbsz: integer value of the instruction's CBSZ modifier
+            abid: integer value of the instruction's ABID modifier
+            blgp: integer value of the instruction's BLGP modifier
+            opsel: integer value of the instruction's OPSEL modifier
+            transpose: boolean set to true to cause the matrix to be printed transposed
+            contig_values: an integer that defines the number of contiguous values of a
+                register that are used to hold unique values of a matrix
+
+        Raises:
+            ValueError: An unsupported matrix was requested.
+        """
+        table_to_print = self._build_matrix_layout_table(
+            matrix, requested_output, negate, cbsz, abid, blgp, opsel, contig_values)
         if transpose:
             table_to_print = list(map(list, zip(*table_to_print)))
         print(self.__format_output_table(table_to_print, requested_output))
+
+    def print_all_matrix_layouts(self, requested_output: str = "grid",
+                                 transpose: bool = False) -> None:
+        """ Prints the VGPR/lane layout tables for all matrices of the instruction.
+
+        For non-sparse instructions, prints A, B, and C/D matrices.
+        For sparse instructions, prints A, B, K (compression index), and D matrices.
+        Uses default modifier values (cbsz=0, abid=0, blgp=0, opsel=0, no negation).
+
+        Args:
+            requested_output: string that indicates the type of output, from the list of
+                csv, markdown, asciidoc, or grid
+            transpose: boolean set to true to cause the matrices to be printed transposed
+        """
+        negate = dict.fromkeys(['a', 'b', 'c', 'd', 'k',
+                                'a_lo', 'a_hi', 'b_lo', 'b_hi',
+                                'c_lo', 'c_hi', 'c_abs',
+                                'd_lo', 'd_hi', 'k_lo', 'k_hi'], False)
+        sparse = self.inst_info['sparse']
+
+        if sparse:
+            matrices = [('a', 'A Matrix (sparse)'), ('b', 'B Matrix'),
+                        ('k', 'Compression Index (K)'), ('d', 'D Matrix')]
+        else:
+            matrices = [('a', 'A Matrix'), ('b', 'B Matrix'), ('c', 'C/D Matrix')]
+
+        for mat_key, label in matrices:
+            contig_values = self._get_contig_values(mat_key)
+            table = self._build_matrix_layout_table(
+                mat_key, requested_output, negate, 0, 0, 0, 0, contig_values)
+            if transpose:
+                table = list(map(list, zip(*table)))
+            print(f"\n{label}:")
+            print(self.__format_output_table(table, requested_output))
+
+    def _get_contig_values(self, matrix: str) -> int:
+        """ Returns the number of contiguous lane values for the given matrix.
+
+        This is the architecture-specific default used by print_all_matrix_layouts().
+        gfx9 always uses 64.
+
+        Args:
+            matrix: string that contains the name of the matrix
+
+        Returns:
+            An integer with the number of contiguous values.
+        """
+        return 64
 
     def _get_instruction_num_gprs(self, matrix: str, in_lanes: Optional[int] = None,
                                   out_size: Optional[int] = None) -> int:
@@ -5340,6 +5436,7 @@ class InstCalc(metaclass=ABCMeta):
         self._print_register_info()
         self._print_element_to_register_eqn()
         self._print_register_to_element_eqn()
+        self.print_all_matrix_layouts()
 
 
 class InstCalcGfx9(InstCalc):
@@ -6502,6 +6599,19 @@ class InstCalcGfx11(InstCalc):
         super().calculate_matrix_layout(matrix, requested_output, negate, cbsz, abid, blgp, opsel,
                                         transpose, contig_values)
 
+    def _get_contig_values(self, matrix: str) -> int:
+        """ Returns the number of contiguous lane values for the given matrix.
+
+        gfx11 always uses 16.
+
+        Args:
+            matrix: string that contains the name of the matrix
+
+        Returns:
+            An integer with the number of contiguous values.
+        """
+        return 16
+
     def _get_instruction_num_gprs(self, matrix: str, in_lanes: Optional[int] = 16,
                                   out_size: Optional[int] = 32) -> int:
         """ Calculates the number of GPRs needed to hold a matrix.
@@ -7312,6 +7422,26 @@ class InstCalcGfx12(InstCalc):
             contig_values = 32
         super().calculate_matrix_layout(matrix, requested_output, negate, cbsz, abid, blgp, opsel,
                                         transpose, contig_values)
+
+    def _get_contig_values(self, matrix: str) -> int:
+        """ Returns the number of contiguous lane values for the given matrix.
+
+        gfx12's values change depending on the wavefront width and data type/K.
+
+        Args:
+            matrix: string that contains the name of the matrix
+
+        Returns:
+            An integer with the number of contiguous values.
+        """
+        contig_values = self.wave_width
+        data_size = get_data_size(self.inst_info['in_type'])
+        K = self.inst_info['k']
+        if data_size == 4 and K == 16:
+            contig_values = 32
+        if matrix.lower() in ('a', 'k') and data_size == 4 and K == 32:
+            contig_values = 32
+        return contig_values
 
     def _get_instruction_num_gprs(self, matrix: str, in_lanes: Optional[int] = None,
                                   out_size: Optional[int] = None) -> int:

@@ -283,6 +283,37 @@ def run_detailed_instructions(test_app, temp_dir):
                 num_tests += 1
     return temp_file
 
+def run_diagram_tests(test_app, temp_dir):
+    """ Runs tests that print the VGPR/lane diagram layout for all matrices across all
+        architectures and instructions. Also tests format variants (--csv, --markdown,
+        --transpose) on a subset of instructions.
+        Saves the output of running all of these tests into a file contained in the
+        directory pointed to by temp_dir. Returns the (handle, file_name) of this
+        output to the calling function.
+    """
+    temp_file = mkstemp(suffix='.txt', prefix='diagram_', dir=temp_dir, text=True)
+    with TestRunner(test_app, temp_file[1]) as r:
+        for arch in get_architectures(r):
+            for inst in get_instructions(r, arch):
+                r.run(f"-a {arch} -i {inst} --diagram")
+                # Test alternate wave widths on architectures that support them
+                for wave in get_supported_wave_sizes(arch):
+                    if wave != 32:
+                        r.run(f"-a {arch} -i {inst} --diagram -w {wave}")
+        # Test format variants on a representative instruction per architecture family
+        format_tests = [
+            ("cdna1", "v_mfma_f32_4x4x1f32"),
+            ("cdna3", "v_mfma_f32_16x16x16_f16"),
+            ("rdna3", "v_wmma_f32_16x16x16_f16"),
+            ("rdna4", "v_wmma_f32_16x16x16_f16"),
+        ]
+        for arch, inst in format_tests:
+            r.run(f"-a {arch} -i {inst} --diagram --csv")
+            r.run(f"-a {arch} -i {inst} --diagram --markdown")
+            r.run(f"-a {arch} -i {inst} --diagram --asciidoc")
+            r.run(f"-a {arch} -i {inst} --diagram --transpose")
+    return temp_file
+
 def get_num(r, arch, inst, find_this, which_to_check=0):
     """ Search for a number output from the tool's detailed instruction print-out.
         Most of these numbers are of the form 'Thing to find: number\n'. As such,
@@ -742,6 +773,7 @@ def parse_and_run():
         files.append(run_good_help_and_version(test_script_path, temp_dir))
         files.append(run_instruction_list(test_script_path, temp_dir))
         files.append(run_detailed_instructions(test_script_path, temp_dir))
+        files.append(run_diagram_tests(test_script_path, temp_dir))
         _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
                                                        "register-layout", cores)]
         _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
