@@ -16,9 +16,9 @@ Prerequisites
 -------------------------------------------------------------------------------------
 This tool requires the following:
 * Python3
-* The Python package `joblib`:
-    * To install this package system wide, execute: `sudo pip install joblib`
-    * To install this package for the local user, execute: `pip install joblib --user`
+* The calculator's own prerequisites (see the top-level `README.md`)
+* The Python packages in `requirements-test.txt` (`joblib` for this tool, plus the `pylint` development tool):
+    * From the repository root, execute: `pip install -r requirements.txt -r requirements-test.txt`
 * Installing prerequisites itself may require you to install `pip`
 
 Delta Test Tool Usage
@@ -81,4 +81,4 @@ The script exits with 0 if the outputs are identical, 1 if they differ (the path
 
 Trademark Attribution
 -------------------------------------------------------------------------------------
-&copy; 2022-2023 Advanced Micro Devices, Inc. All rights reserved. AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. in the United States and/or other jurisdictions. Other names are for informational purposes only and may be trademarks of their respective owners.
+&copy; 2022-2026 Advanced Micro Devices, Inc. All rights reserved. AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. in the United States and/or other jurisdictions. Other names are for informational purposes only and may be trademarks of their respective owners.
