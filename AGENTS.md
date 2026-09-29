@@ -37,3 +37,8 @@ The tester reads the architecture list from the tool's `--help` output (the "fol
 
 - Must run on old Python 3. Use `typing.Dict`/`List`/`Tuple`, not `dict[...]`/`tuple[...]` (this broke Python < 3.9 before). `TypedDict` falls back to `typing_extensions`.
 - Bump `VERSION` in `matrix_calculator.py` on every code change (and in `test/delta_test.py` when the tester changes). Keep `README.md` in sync.
+- New files start with the short SPDX header (right after the shebang, if any), not the verbose MIT block; the full text lives in `LICENSE`:
+  ```
+  # Copyright Advanced Micro Devices, Inc., or its affiliates.
+  # SPDX-License-Identifier: MIT
+  ```
