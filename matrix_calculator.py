@@ -6797,8 +6797,8 @@ class InstCalcGfx11(InstCalc):
 class InstCalcGfx12(InstCalc):
     """ Calculator for matrix multiplication instruction details on gfx12 architecture.
 
-    This is a child class of the InstCalcGfx11 class, because gfx12/RDNA4 shares many, but not
-    all, of its calculations with gfx11/RDNA3.
+    This is a child class of the InstCalc class, because gfx12/RDNA4 requires different
+    calculations than other architectures, including gfx11/RDNA3.
 
     Attributes:
         arch_name: string that holds the accelerator architecture's name

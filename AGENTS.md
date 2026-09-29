@@ -31,7 +31,7 @@ The tester reads the architecture list from the tool's `--help` output (the "fol
 
 - **Data tables** (first ~2900 lines): `dict_isas` (alias → arch key), `dict_math_types`, and `dict_insts[arch][mnemonic]` (`MatrixInstruction` TypedDicts with dimensions, cycles, and modifier-support flags). Adding an instruction or alias mostly means editing these, plus the README.
 - **`parse_and_run()`**: all argument validation (errors go to stderr and return `-2`), then it picks the calculator class via `is_gfx9_arch`/`is_gfx11_arch`/`is_gfx12_arch`.
-- **Calculator classes**: `InstCalc` (abstract base with the generic table building and output formatting) is subclassed by `InstCalcGfx9` (CDNA), `InstCalcGfx11` (RDNA3), and `InstCalcGfx12` (RDNA4). The core per-arch hook is `_get_reg_lanes()`. `InstCalcGfx12`'s docstring says it is a child of Gfx11, but it inherits from `InstCalc`.
+- **Calculator classes**: `InstCalc` (abstract base with the generic table building and output formatting) is subclassed by `InstCalcGfx9` (CDNA), `InstCalcGfx11` (RDNA3), and `InstCalcGfx12` (RDNA4). The core per-arch hook is `_get_reg_lanes()`.
 
 ## Conventions
 
