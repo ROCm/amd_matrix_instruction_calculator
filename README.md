@@ -70,7 +70,7 @@ This tool requires the following:
     * To install this package system wide, execute: `sudo pip install typing_extensions`
     * To install this package for the local user, execute: `pip install typing_extensions --user`
 * Installing prerequisites itself may require you to install `pip`
-* Now users can use `pip install -r requirements.txt` to install dependent packages
+* To install all of the required packages at once, execute: `pip install -r requirements.txt`
 
 Calculator Usage
 -------------------------------------------------------------------------------------------------------
@@ -91,6 +91,7 @@ Command line parameters are case sensitive, but inputs for the command-line para
     * `RDNA4`, `gfx1200` or `gfx1201`: The AMD Radeon RDNA 4 series of GPUs
 * `--list-instructions` (or `-L`): This parameter will print the supported matrix multiplication instructions for the chosen architecture and exit the application.
 * `--instruction {instruction mnemonic}` (or `-i {instruction mnemonic}`): This parameter chooses which instruction, from the list of legal matrix multiplication instructions in the chosen architecture, to use for the calculations in this tool.
+* `--wavefront {32/64}` (or `-w {32/64}`): This parameter chooses the wavefront width used when calculating registers and lanes. AMD CDNA&trade; architectures only support a width of 64, which is the default. The AMD RDNA 3 and RDNA 4 architectures support widths of 32 and 64, and default to 32.
 
 ### Querying Matrix Multiplication Instruction Information
 The following option requires both the `--architecture` and `--instruction` parameters to be set.
@@ -481,7 +482,7 @@ This will not cause any change to the matrix itself or the registers that hold t
 
 The following is an example that requests entries for all registers used by the V\_MFMA\_F64\_4X4X4F64 instruction in the CDNA&trade; 2 architecture.
 ```
-./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f64_4x4x4f64 --matrix-layout --D-matrix
+$ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f64_4x4x4f64 --matrix-layout --D-matrix
 Architecture: CDNA2
 Instruction: V_MFMA_F64_4X4X4F64
 +--------+------------+
@@ -815,7 +816,7 @@ This is the same output with the CBSZ modifier set to the value 2 (broadcast 1 b
 This will change the values that will be multiplied by blocks 0, 1, and 3 of the B\[\] matrix, and what results are added to the C\[\] matrix values of blocks 0, 1, and 3.
 
 ```
-./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f32_16x16x2bf16 --register-layout --A-matrix --cbsz 2 --abid 2
+$ ./matrix_calculator.py --architecture cdna2 --instruction v_mfma_f32_16x16x2bf16 --register-layout --A-matrix --cbsz 2 --abid 2
 Architecture: CDNA2
 Instruction: V_MFMA_F32_16X16X2BF16
 Blocks 0, 1, 2, 3
@@ -980,7 +981,7 @@ Any of the bits may be set at the same time.
 The following is an example that requests the matrix layout of the matrix B for the V\_MFMA\_F64\_16X16X4\_F64 instruction in the CDNA 3 architecture, with the BLGP value of 6.
 Because the value 6 has the middle bit set, the values of the B\[\] matrix are returned with a negative sign to indicate that their values will be negated by the instruction.
 ```
-./matrix_calculator.py --architecture cdna3 --instruction v_mfma_f64_16x16x4_f64 --matrix-layout --B-matrix --blgp 6
+$ ./matrix_calculator.py --architecture cdna3 --instruction v_mfma_f64_16x16x4_f64 --matrix-layout --B-matrix --blgp 6
 Architecture: CDNA3
 Instruction: V_MFMA_F64_16X16X4_F64
 +--------+-----------+
@@ -1650,11 +1651,11 @@ This section is meant to contains a list of as many of these documents as possib
         * Public ISA guide for AMD Instinct MI300 Series Accelerators, which use the CDNA 3 ISA
 * RDNA&trade; Architecture Information
     * <https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna3-shader-instruction-set-architecture-feb-2023_0.pdf>
-        * Public ISA Guide for AMD Radeon&trade; GPUs using the RNDA3 ISA
+        * Public ISA Guide for AMD Radeon&trade; GPUs using the RDNA3 ISA
     * <https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna4-instruction-set-architecture.pdf>
         * Public ISA Guide for AMD Radeon GPUs using the RDNA4 ISA
 * AMD Blog Posts
-    * <https://gpuopen.com/learn/amd-lab-notes/amd-lab-notes-matrix-cores-README/>
+    * <https://rocm.blogs.amd.com/software-tools-optimization/matrix-cores/README.html>
         * AMD lab notes about AMD Matrix Cores, which covers the use of MFMA instructions in CDNA 1 and CDNA 2 accelerators
     * <https://gpuopen.com/learn/wmma_on_rdna3/>
         * "How to accelerate AI applications on RDNA 3 using WMMA", which covers the use of WMMA instructions on RDNA3 GPUs
