@@ -125,7 +125,7 @@ def run_error_tests(test_app, temp_dir):
         r.run("-a cdna1 -i")
         r.run("-a cdna1 -i bad_inst")
         for arg in ("I-coordinate", "J-coordinate", "K-coordinate", "block", "register", "lane",
-                    "cbsz", "abid", "blgp", "wavefront", "neg"):
+                    "cbsz", "abid", "blgp", "wavefront", "neg", "opsel", "neg_hi"):
             r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg}")
             r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} 0xdeadbeef")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32")
@@ -167,10 +167,12 @@ def run_error_tests(test_app, temp_dir):
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg 1")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --neg_hi 1")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -A --csv --markdown")
-        r.run("-a rdna4 -i v_wmma_f32_16x16x16_f16 --register-layout -A -opsel 1")
-        r.run("-a rdna4 -i v_swmmac_f32_16x16x32_f16 --register-layout -A -opsel 1")
-        r.run("-a rdna4 -i v_swmmac_f32_16x16x32_f16 --register-layout -k -opsel 7")
+        r.run("-a rdna4 -i v_wmma_f32_16x16x16_f16 --register-layout -A --opsel 1")
+        r.run("-a rdna4 -i v_swmmac_f32_16x16x32_f16 --register-layout -A --opsel 1")
+        r.run("-a rdna4 -i v_swmmac_f32_16x16x32_f16 --register-layout -k --opsel 7")
         r.run("-a rdna4 -i v_wmma_f32_16x16x16_fp8_fp8 --register-layout -A --neg 1")
+        r.run("-a rdna4 -i v_swmmac_i32_16x16x64_iu4 --register-layout -k --opsel 1 -w 32")
+        r.run("-a rdna3 -i v_wmma_f32_16x16x16_f16 --register-layout -A --abid 1")
         r.run("-a rdna4 -i v_wmma_f32_16x16x16_fp8_fp8 --register-layout -A --neg_hi 1")
 
         # Test bad coordinates for single register
@@ -363,6 +365,15 @@ def get_in_bits(r, arch, inst):
         sys.exit(-1)
     return to_ret
 
+def get_output_format_args(num_done):
+    """ Returns the output format arguments for a layout test, cycling through every output
+        format both with and without --transpose as num_done increases.
+    """
+    format_arg = ("", "--csv", "--markdown", "--asciidoc")[num_done % 4]
+    if (num_done // 4) % 2 == 1:
+        format_arg += " --transpose"
+    return format_arg
+
 def run_get_register(runner, matrix, M, N, K, B, test_string):
     """ Runs the --get-register test over a series of I, J, K, and block values for the desired
         matrix. The test_string is used to pass in most of the line that will run, so it should
@@ -428,6 +439,8 @@ def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, m
         max_reg_to_use = 1
     else:
         max_reg_to_use = cd_regs
+    if matrix == 'D':
+        test_string += " --output-calculation"
     # Test only 2 registers instead of the whole range, to reduce the amount of test time taken.
     # Test the first and last registers. This should verify that we can test 0 and non-zero in the
     # matrix-entry calculations. If the actual "where does something live" calculations are bad,
@@ -549,12 +562,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                                 test_string += f"--cbsz {cbsz} --abid {abid} --neg {neg} "
                                 test_string += f"--neg_hi {neg} --opsel {opsel} -w {wave} "
                                 if test_name in ("register-layout", "matrix-layout"):
-                                    if num_done % 3 == 1:
-                                        test_string += "--csv"
-                                    elif num_done % 3 == 2:
-                                        test_string += "--markdown"
-                                    if num_done % 2 == 1:
-                                        test_string += " --transpose"
+                                    test_string += get_output_format_args(num_done)
                                     r.run(test_string)
                                 elif test_name == "get-register":
                                     run_get_register(r, matrix, M, N, K, B, test_string)
@@ -571,12 +579,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                         test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} --blgp {blgp} "
                         test_string += f"--neg {neg} --neg_hi {neg} -w {wave} "
                         if test_name in ("register-layout", "matrix-layout"):
-                            if num_done % 3 == 1:
-                                test_string += "--csv"
-                            elif num_done % 3 == 2:
-                                test_string += "--markdown"
-                            if num_done % 2 == 1:
-                                test_string += " --transpose"
+                            test_string += get_output_format_args(num_done)
                             r.run(test_string)
                         elif test_name == "get-register":
                             run_get_register(r, matrix, M, N, K, B, test_string)
@@ -588,19 +591,18 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                             sys.exit(-1)
                         num_done += 1
             else:
-                if matrix == 'D':
-                    max_neg = 0
-                for neg in range(max_neg+1):
+                # D only accepts NEG/NEG_HI together with --output-calculation, which only the
+                # get-register and matrix-entry tests pass for it.
+                if matrix == 'D' and test_name not in ("get-register", "matrix-entry"):
+                    matrix_max_neg = 0
+                else:
+                    matrix_max_neg = max_neg
+                for neg in range(matrix_max_neg+1):
                     for opsel in opsel_vals:
                         test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} -w {wave} "
-                        test_string += f"--opsel {opsel} --neg {max_neg} --neg_hi {max_neg} "
+                        test_string += f"--opsel {opsel} --neg {neg} --neg_hi {neg} "
                         if test_name in ("register-layout", "matrix-layout"):
-                            if num_done % 3 == 1:
-                                test_string += "--csv"
-                            elif num_done % 3 == 2:
-                                test_string += "--markdown"
-                            if num_done % 2 == 1:
-                                test_string += " --transpose"
+                            test_string += get_output_format_args(num_done)
                             r.run(test_string)
                         elif test_name == "get-register":
                             run_get_register(r, matrix, M, N, K, B, test_string)

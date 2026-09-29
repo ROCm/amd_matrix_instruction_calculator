@@ -18,10 +18,10 @@ pylint matrix_calculator.py test/delta_test.py                     # must stay 1
 
 ## Testing
 
-There are no unit tests and no golden output. `test/delta_test.py` runs the tool over a huge set of valid and invalid command lines and writes all output to one file (about 30 MB, 1–2 min). It exits non-zero if any command unexpectedly succeeds or fails.
+There are no unit tests and no golden output. `test/delta_test.py` runs the tool over a huge set of valid and invalid command lines and writes all output to one file (about 30 MB, ~2 min). It exits non-zero if any command unexpectedly succeeds or fails.
 
 ```bash
-./test/delta_diff.sh          # delta test on merge-base with main vs. working tree, then diff (~3 min)
+./test/delta_diff.sh          # delta test on merge-base with main vs. working tree, then diff (~4 min)
 ./test/delta_diff.sh <ref>    # compare against any git ref; exit 0 = identical, 1 = differs, 2 = error
 ```
 
