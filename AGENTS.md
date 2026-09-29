@@ -13,17 +13,20 @@ pip install -r requirements.txt -r requirements-test.txt
 ./matrix_calculator.py -a cdna3 -i v_mfma_f32_32x32x8_f16 -d       # instruction details
 ./matrix_calculator.py -a rdna3 -i v_wmma_f32_16x16x16_f16 -A -R   # A-matrix register layout
 
-pylint matrix_calculator.py test/delta_test.py                     # must stay 10.00/10
+pylint matrix_calculator.py test/*.py                              # must stay 10.00/10
 ```
 
 ## Testing
 
-There are no unit tests and no golden output. `test/delta_test.py` runs the tool over a huge set of valid and invalid command lines and writes all output to one file (about 30 MB, ~2 min). It exits non-zero if any command unexpectedly succeeds or fails.
+There are no unit tests. `test/delta_test.py` runs the tool over a huge set of valid and invalid command lines and writes all output to one file (about 30 MB, ~2 min). It exits non-zero if any command unexpectedly succeeds or fails.
 
 ```bash
 ./test/delta_diff.sh          # delta test on merge-base with main vs. working tree, then diff (~4 min)
 ./test/delta_diff.sh <ref>    # compare against any git ref; exit 0 = identical, 1 = differs, 2 = error
+./test/readme_examples_test.py  # README examples must match the tool's output exactly (~1 s)
 ```
+
+The delta test only detects *changes* in output; the README examples are the only checked-in reference answers. If a change intentionally alters an example's output, update `README.md` too.
 
 The tester reads the architecture list from the tool's `--help` output (the "following architectures" line and the "Alternately:" lines). Keep that format, or update `get_architectures`/`get_alt_architectures`. Per-arch wave sizes and lane limits are hardcoded in `get_supported_wave_sizes`/`get_max_lane_num`; update them when adding an architecture.
 

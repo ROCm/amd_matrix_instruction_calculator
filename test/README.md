@@ -78,6 +78,17 @@ $ ./delta_diff.sh some_branch  # compare against any git ref
 
 The script exits with 0 if the outputs are identical, 1 if they differ (the path to the full diff is printed), and 2 on error.
 
+Checking the README Examples
+-------------------------------------------------------------------------------------
+The `readme_examples_test.py` script runs every example command in the top-level `README.md` (the lines starting with `$ ./matrix_calculator.py`) and checks that the calculator's current output matches the output shown in the README.
+Unlike the Delta Test Tool, these are reference outputs kept in the repository, so it needs no previous version to compare against and runs in about a second.
+A mismatch means either a regression or a README that needs updating; the script prints a diff for each mismatching example and exits with a non-zero status.
+
+```
+$ ./readme_examples_test.py
+All 20 README examples match.
+```
+
 Trademark Attribution
 -------------------------------------------------------------------------------------
 &copy; 2022-2026 Advanced Micro Devices, Inc. All rights reserved. AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. in the United States and/or other jurisdictions. Other names are for informational purposes only and may be trademarks of their respective owners.
