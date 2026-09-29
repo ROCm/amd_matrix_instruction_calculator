@@ -63,6 +63,22 @@ $ ./delta_test.py --overwrite new_tests.txt
 Tests completed.
 ```
 
+Comparing Against a Previous Version
+-------------------------------------------------------------------------------------
+The `delta_diff.sh` script automates the before-and-after workflow.
+It checks out a base git ref into a temporary git worktree, runs the Delta Test Tool on both that ref and the current working tree (including uncommitted changes), and diffs the two outputs.
+The current `delta_test.py` is used for both runs, so the outputs are comparable even if the tester itself changed.
+
+```
+$ ./delta_diff.sh              # compare against the merge-base of HEAD and main
+$ ./delta_diff.sh some_branch  # compare against any git ref
+```
+
+* `-c {#}`: Number of parallel test jobs, passed through to `delta_test.py`.
+* `-k`: Keep the output directory even when there are no differences.
+
+The script exits with 0 if the outputs are identical, 1 if they differ (the path to the full diff is printed), and 2 on error.
+
 Trademark Attribution
 -------------------------------------------------------------------------------------
 &copy; 2022-2023 Advanced Micro Devices, Inc. All rights reserved. AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. in the United States and/or other jurisdictions. Other names are for informational purposes only and may be trademarks of their respective owners.
