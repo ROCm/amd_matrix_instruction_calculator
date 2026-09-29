@@ -49,17 +49,23 @@ from tempfile import mkstemp, TemporaryDirectory
 from shutil import copyfileobj
 from textwrap import wrap
 from pathlib import Path
+from threading import Lock
 from os import path
 from re import findall, search, MULTILINE
 from joblib import Parallel, delayed
 
-VERSION = "1.1.2"
+VERSION = "1.2"
 
 class TestRunner:
     """ Class to run the application under test with a chosen command line, redirect the output
         to a chosen file, and print error messages if the application fails when it should
         succeed, or succeeds when it should fail.
+        Unexpected results are counted across all runners in num_failures, which parse_and_run
+        uses to set the exit code.
     """
+    num_failures = 0
+    failure_lock = Lock()
+
     def __init__(self, test_app, output_file, expected_success=True):
         self.test_app = test_app
         self.path = str(output_file)
@@ -99,6 +105,9 @@ class TestRunner:
                 print(f"       Command array: {to_run}")
                 print(f"       Output file at {self.path}")
                 to_return = False
+        if not to_return:
+            with TestRunner.failure_lock:
+                TestRunner.num_failures += 1
         return to_return
 
     def run_internal(self, args_string):
@@ -756,6 +765,10 @@ def parse_and_run():
                 with open(in_file[1], "r", encoding="utf-8") as fin:
                     copyfileobj(fin, fout)
 
+    if TestRunner.num_failures > 0:
+        print(f"Tests completed with {TestRunner.num_failures} unexpected result(s). "
+              "See ERROR messages above.")
+        sys.exit(-1)
     print("Tests completed.")
 
 if __name__ == '__main__':

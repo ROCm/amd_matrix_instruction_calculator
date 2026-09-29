@@ -10,6 +10,8 @@ This allows a few types of application-level tests:
 We do not ship a "known good" set of tool outputs, because such a file would be very large in comparison to the rest of the AMD Matrix Instruction Calculator repository: on the order of 10s to 100s of megabytes.
 Therefore, this tool is meant to be run by developers before and after changes to check for unexpected 'deltas'.
 
+If any command succeeds when it was expected to fail (or vice versa), the tool prints an `ERROR:` message for it and exits with a non-zero status after writing the output file.
+
 Prerequisites
 -------------------------------------------------------------------------------------
 This tool requires the following:
