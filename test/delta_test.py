@@ -78,13 +78,11 @@ class TestRunner:
                 print(f"ERROR: Expected this to succeed: {' '.join(run_str)}")
                 print(f"       But it failed with a return value of {ret_val}")
                 print(f"       Command array: {to_run}")
-                print(f"       Output file at {self.path}")
                 to_return = False
             elif (not self.expected_success and ret_val == 0):
                 print(f"ERROR: Expected this to fail: {' '.join(run_str)}")
                 print(f"       But it succeeded with a return value of {ret_val}")
                 print(f"       Command array: {to_run}")
-                print(f"       Output file at {self.path}")
                 to_return = False
         if not to_return:
             with TestRunner.failure_lock:
@@ -111,7 +109,6 @@ class TestRunner:
                 print(f"ERROR: Expected this internal command to succeed: {' '.join(run_str)}")
                 print(f"       But it failed with a return value of {proc.returncode}")
                 print(f"       Command array: {to_run}")
-                print(f"       Output file at {self.path}")
                 sys.exit(-1)
         return str(ret_str)
 
@@ -748,7 +745,8 @@ def parse_and_run():
 
     if TestRunner.num_failures > 0:
         print(f"Tests completed with {TestRunner.num_failures} unexpected result(s). "
-              "See ERROR messages above.")
+              "See ERROR messages above; each command's output follows the command in "
+              f"{output_file_path}.")
         sys.exit(-1)
     print("Tests completed.")
 
