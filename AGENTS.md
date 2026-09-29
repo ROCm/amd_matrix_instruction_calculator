@@ -7,7 +7,7 @@ Single-file Python CLI (`matrix_calculator.py`) that maps matrix elements ↔ re
 ## Commands
 
 ```bash
-pip install -r requirements.txt -r requirements-test.txt pylint
+pip install -r requirements.txt -r requirements-test.txt
 
 ./matrix_calculator.py -a cdna3 -L                                 # list instructions
 ./matrix_calculator.py -a cdna3 -i v_mfma_f32_32x32x8_f16 -d       # instruction details
