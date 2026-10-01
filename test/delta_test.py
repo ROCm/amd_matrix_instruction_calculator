@@ -20,7 +20,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-""" AMD Matrix Instruction Calculator Delta Test Tool
+"""AMD Matrix Instruction Calculator Delta Test Tool
 This tool will run the AMD Matrix Instruction Calculator over many command-line options
 in order to test application code paths. In an effort to keep test execution time low,
 it runs tests in parallel and saves their output to temporary files. After all tests
@@ -41,25 +41,29 @@ large in comparison to the rest of the AMD MAtrix Instruction Calculator reposit
 on the order of 10s to 100s of megabytes. Therefore this tool is meant to be run by
 developers before and after changes to check for unexpected 'deltas'.
 """
-import sys
+
 import argparse
 import math
-from subprocess import Popen, PIPE
-from tempfile import mkstemp, TemporaryDirectory
-from shutil import copyfileobj
-from textwrap import wrap
-from pathlib import Path
+import sys
 from os import path
-from re import findall, search, MULTILINE
+from pathlib import Path
+from re import MULTILINE, findall, search
+from shutil import copyfileobj
+from subprocess import PIPE, Popen
+from tempfile import TemporaryDirectory, mkstemp
+from textwrap import wrap
+
 from joblib import Parallel, delayed
 
 VERSION = "1.1.2"
 
+
 class TestRunner:
-    """ Class to run the application under test with a chosen command line, redirect the output
-        to a chosen file, and print error messages if the application fails when it should
-        succeed, or succeeds when it should fail.
+    """Class to run the application under test with a chosen command line, redirect the output
+    to a chosen file, and print error messages if the application fails when it should
+    succeed, or succeeds when it should fail.
     """
+
     def __init__(self, test_app, output_file, expected_success=True):
         self.test_app = test_app
         self.path = str(output_file)
@@ -74,7 +78,7 @@ class TestRunner:
         self.output_file.close()
 
     def run(self, args_string):
-        """ Function used to actually run the test and compare outputs """
+        """Function used to actually run the test and compare outputs"""
         to_return = True
         if bool(search(r" ", str(self.test_app))):
             app_str = f"'{self.test_app}'"
@@ -84,16 +88,18 @@ class TestRunner:
         run_str = list(filter(None, run_str.strip().split(' ')))
         print(str(' '.join(run_str)), file=self.output_file, flush=True)
         args_list = list(filter(None, args_string.strip().split(' ')))
-        to_run = [str(self.test_app),] + args_list
+        to_run = [
+            str(self.test_app),
+        ] + args_list
         with Popen(to_run, stdout=self.output_file, stderr=self.output_file) as p:
             ret_val = p.wait()
-            if (self.expected_success and ret_val != 0):
+            if self.expected_success and ret_val != 0:
                 print(f"ERROR: Expected this to succeed: {' '.join(run_str)}")
                 print(f"       But it failed with a return value of {ret_val}")
                 print(f"       Command array: {to_run}")
                 print(f"       Output file at {self.path}")
                 to_return = False
-            elif (not self.expected_success and ret_val == 0):
+            elif not self.expected_success and ret_val == 0:
                 print(f"ERROR: Expected this to fail: {' '.join(run_str)}")
                 print(f"       But it succeeded with a return value of {ret_val}")
                 print(f"       Command array: {to_run}")
@@ -102,10 +108,10 @@ class TestRunner:
         return to_return
 
     def run_internal(self, args_string):
-        """ Function used for running the matrix instruction calculator internally for this
-            test script. Used to get things like detailed instruction info for calculations.
-            Do not test the output success -- it should work or this script is broken.
-            But return the output so that we can use it for other calculations.
+        """Function used for running the matrix instruction calculator internally for this
+        test script. Used to get things like detailed instruction info for calculations.
+        Do not test the output success -- it should work or this script is broken.
+        But return the output so that we can use it for other calculations.
         """
         if bool(search(r" ", str(self.test_app))):
             app_str = f"'{self.test_app}'"
@@ -114,7 +120,9 @@ class TestRunner:
         run_str = f"{app_str} {args_string}"
         run_str = list(filter(None, run_str.strip().split(' ')))
         args_list = list(filter(None, args_string.strip().split(' ')))
-        to_run = [str(self.test_app),] + args_list
+        to_run = [
+            str(self.test_app),
+        ] + args_list
         with Popen(to_run, stdout=PIPE, universal_newlines=True) as proc:
             ret_str = proc.communicate()[0]
             if proc.returncode != 0:
@@ -125,10 +133,11 @@ class TestRunner:
                 sys.exit(-1)
         return str(ret_str)
 
+
 def run_error_tests(test_app, temp_dir):
-    """ Run a variety of tests that should fail, because they are passing in bad values to the
-        tool. The tool should catch these bad values and the runner expects to receive a
-        failure.
+    """Run a variety of tests that should fail, because they are passing in bad values to the
+    tool. The tool should catch these bad values and the runner expects to receive a
+    failure.
     """
     temp_file = mkstemp(suffix='.txt', prefix='error_tests_', dir=temp_dir, text=True)
     with TestRunner(test_app, temp_file[1], False) as r:
@@ -137,14 +146,27 @@ def run_error_tests(test_app, temp_dir):
         r.run("-a bad_arch")
         r.run("-a cdna1 -i")
         r.run("-a cdna1 -i bad_inst")
-        for arg in ("I-coordinate", "J-coordinate", "K-coordinate", "block", "register", "lane",
-                    "cbsz", "abid", "blgp", "wavefront", "neg"):
+        for arg in (
+            "I-coordinate",
+            "J-coordinate",
+            "K-coordinate",
+            "block",
+            "register",
+            "lane",
+            "cbsz",
+            "abid",
+            "blgp",
+            "wavefront",
+            "neg",
+        ):
             r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg}")
             r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} 0xdeadbeef")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register --matrix-entry")
-        r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register --matrix-entry --register-layout "\
-              "--matrix-layout")
+        r.run(
+            "-a cdna1 -i v_mfma_f32_32x32x1f32 --get-register --matrix-entry --register-layout "
+            "--matrix-layout"
+        )
         for arg in ("get-register", "matrix-entry", "register-layout", "matrix-layout"):
             r.run(f"-a cdna1 -i v_mfma_f32_32x32x1f32 --{arg} -A -B")
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --register-layout -C --output-calculation")
@@ -202,9 +224,10 @@ def run_error_tests(test_app, temp_dir):
         r.run("-a cdna1 -i v_mfma_f32_32x32x1f32 --matrix-entry -B --register 0 --lane 0 --blgp 2")
     return temp_file
 
+
 def run_good_help_and_version(test_app, temp_dir):
-    """ Run some very simple tests that check for help printout and tool version number.
-        All of these tests should succeed.
+    """Run some very simple tests that check for help printout and tool version number.
+    All of these tests should succeed.
     """
     temp_file = mkstemp(suffix='.txt', prefix='help_ver_', dir=temp_dir, text=True)
     with TestRunner(test_app, temp_file[1]) as r:
@@ -214,22 +237,24 @@ def run_good_help_and_version(test_app, temp_dir):
         r.run("--version")
     return temp_file
 
+
 def get_architectures(r):
-    """ Helper function to get the available architectures that can be used as primary inputs
-        to the tool. This test function may need to be updated as the output string from
-        the help function are updated, since it is doing checking against the output string.
+    """Helper function to get the available architectures that can be used as primary inputs
+    to the tool. This test function may need to be updated as the output string from
+    the help function are updated, since it is doing checking against the output string.
     """
     outp = r.run_internal("--help").strip()
     found_lines = ''.join(findall(r"following architectures.+\n", outp)).strip()
     split_out = found_lines.split(": ")
     return split_out[1].split(", ")
 
+
 def get_alt_architectures(r):
-    """ Helper function to get the available alternative names for each of the main architectures.
-        This is useful when we want to test that all of these alternative names are actually
-        accepted by the tool. This may need to be updated as the string output of the tool's
-        help function is updated, as it expects each line containing alternative names to start
-        with "Alternately:"
+    """Helper function to get the available alternative names for each of the main architectures.
+    This is useful when we want to test that all of these alternative names are actually
+    accepted by the tool. This may need to be updated as the string output of the tool's
+    help function is updated, as it expects each line containing alternative names to start
+    with "Alternately:"
     """
     outp = r.run_internal("--help")
     found_lines = ''.join(findall(r"Alternately:.+\n", outp))
@@ -237,14 +262,15 @@ def get_alt_architectures(r):
     to_ret = to_ret.replace("\n", "").replace("Alternately:", ",")
     return list(filter(None, to_ret.split(",")))
 
+
 def run_instruction_list(test_app, temp_dir):
-    """ Runs a basic set of tests of the --list-instructions and -L options, which should both
-        do the same thing. Tests both to make sure the short form is properly accepted.
-        It will run this against all avaialble architectures and alternate architecture
-        names.
-        Saves the output of running all of these tests into a file contained in the
-        directory pointed to by temp_dir. Returns the (handle, file_name) of this
-        output to the calling function.
+    """Runs a basic set of tests of the --list-instructions and -L options, which should both
+    do the same thing. Tests both to make sure the short form is properly accepted.
+    It will run this against all avaialble architectures and alternate architecture
+    names.
+    Saves the output of running all of these tests into a file contained in the
+    directory pointed to by temp_dir. Returns the (handle, file_name) of this
+    output to the calling function.
     """
     temp_file = mkstemp(suffix='.txt', prefix='inst_list_', dir=temp_dir, text=True)
     with TestRunner(test_app, temp_file[1]) as r:
@@ -254,22 +280,24 @@ def run_instruction_list(test_app, temp_dir):
             r.run(f"-a {arch} -L")
     return temp_file
 
+
 def get_instructions(r, arch):
-    """ Returns a list of all of the instructions avaialble in a target architecture. """
+    """Returns a list of all of the instructions avaialble in a target architecture."""
     outp = r.run_internal(f'--architecture {arch} --list-instructions')
     found_lines = ''.join(findall(r"^ .+\n", outp, flags=MULTILINE))
     to_ret = str(found_lines).strip().replace(" ", "")
     return list(filter(None, to_ret.split("\n")))
 
+
 def run_detailed_instructions(test_app, temp_dir):
-    """ Runs a test that prints out the detailed instruction information for all of the
-        instructions on all avaialble architectures that the tool supports. Does not
-        test against alternate architecture names.
-        Switches between the long arguments (--instruction and --detail-instruction) and
-        the short arguments (-i and -d) to ensure both work.
-        Saves the output of running all of these tests into a file contained in the
-        directory pointed to by temp_dir. Returns the (handle, file_name) of this
-        output to the calling function.
+    """Runs a test that prints out the detailed instruction information for all of the
+    instructions on all avaialble architectures that the tool supports. Does not
+    test against alternate architecture names.
+    Switches between the long arguments (--instruction and --detail-instruction) and
+    the short arguments (-i and -d) to ensure both work.
+    Saves the output of running all of these tests into a file contained in the
+    directory pointed to by temp_dir. Returns the (handle, file_name) of this
+    output to the calling function.
     """
     temp_file = mkstemp(suffix='.txt', prefix='inst_list_', dir=temp_dir, text=True)
     with TestRunner(test_app, temp_file[1]) as r:
@@ -283,15 +311,16 @@ def run_detailed_instructions(test_app, temp_dir):
                 num_tests += 1
     return temp_file
 
+
 def get_num(r, arch, inst, find_this, which_to_check=0):
-    """ Search for a number output from the tool's detailed instruction print-out.
-        Most of these numbers are of the form 'Thing to find: number\n'. As such,
-        this function takes in the 'Thing to find' string and returns the number in
-        integer form.
+    """Search for a number output from the tool's detailed instruction print-out.
+    Most of these numbers are of the form 'Thing to find: number\n'. As such,
+    this function takes in the 'Thing to find' string and returns the number in
+    integer form.
     """
     cmd_to_run = f'--architecture {arch} --instruction {inst} -d'
     outp = r.run_internal(cmd_to_run)
-    to_find = fr"{find_this}:.+\n"
+    to_find = rf"{find_this}:.+\n"
     found_lines = findall(to_find, outp)
     if len(found_lines) > 0:
         to_ret = found_lines[which_to_check].split(": ")[1].strip()
@@ -305,52 +334,58 @@ def get_num(r, arch, inst, find_this, which_to_check=0):
         to_ret = "-1"
     return int(to_ret)
 
+
 def get_matrix_regs(r, arch, inst, wave, matrix):
-    """ Search for a number of registers needed for a particular matrix, from the tool's
-        detailed instruction print-out. Matrix name is passed in as a string. Supports
-        'A', 'B', 'C', and 'D'.
+    """Search for a number of registers needed for a particular matrix, from the tool's
+    detailed instruction print-out. Matrix name is passed in as a string. Supports
+    'A', 'B', 'C', and 'D'.
     """
-    if (len(get_supported_wave_sizes(arch)) == 1 or wave == 32):
+    if len(get_supported_wave_sizes(arch)) == 1 or wave == 32:
         check = 0
     else:
         check = 1
-    return get_num(r, arch, inst, fr"GPRs required for {matrix}", check)
+    return get_num(r, arch, inst, rf"GPRs required for {matrix}", check)
+
 
 def get_supports(r, arch, inst, find_this):
-    """ Search for whether this architecture and instruction supports a particular feature.
-        For instance, BLGP or CBSZ. Uses the tool's detailed instruction print-out to
-        get this info, which usually uses the form 'Thing to find: True/False'. This
-        function therefore takes in a from of 'Thing to find' and returns a bool as to
-        whether the tool says this instruction and architecture supports that thing.
+    """Search for whether this architecture and instruction supports a particular feature.
+    For instance, BLGP or CBSZ. Uses the tool's detailed instruction print-out to
+    get this info, which usually uses the form 'Thing to find: True/False'. This
+    function therefore takes in a from of 'Thing to find' and returns a bool as to
+    whether the tool says this instruction and architecture supports that thing.
     """
     outp = r.run_internal(f'--architecture {arch} --instruction {inst} -d')
-    found_lines = findall(fr"{find_this}.+\n", outp)
+    found_lines = findall(rf"{find_this}.+\n", outp)
     if len(found_lines) > 0:
         to_ret = found_lines[0].split(": ")[1].strip() == 'True'
     else:
         to_ret = False
     return bool(to_ret)
 
+
 def get_supported_wave_sizes(arch):
-    """ Return a tuple of the supported wavefront sizes on the target architecture. """
+    """Return a tuple of the supported wavefront sizes on the target architecture."""
     if arch.upper() in ("RDNA3", "RDNA4"):
         ret_this = (32, 64)
     else:
         ret_this = (64,)
     return ret_this
 
+
 def get_max_lane_num(arch, inst):
-    """ Returns the maximum lane number in a wavefront on the target architecture. """
+    """Returns the maximum lane number in a wavefront on the target architecture."""
     max_lane_num = max(get_supported_wave_sizes(arch)) - 1
-    if (arch.upper() == "RDNA4" and (inst.upper() == "V_SWMMAC_I32_16X16X32_IU4" or
-                                    inst.upper() == "V_WMMA_I32_16X16X16_IU4")):
+    if arch.upper() == "RDNA4" and (
+        inst.upper() == "V_SWMMAC_I32_16X16X32_IU4" or inst.upper() == "V_WMMA_I32_16X16X16_IU4"
+    ):
         max_lane_num = 31
     return max_lane_num
 
+
 def get_in_bits(r, arch, inst):
-    """ For a particular architecture and instruction, return the number of bits required
-        for the input entries. Uses the detailed instruction print-out from the tool to
-        query this info.
+    """For a particular architecture and instruction, return the number of bits required
+    for the input entries. Uses the detailed instruction print-out from the tool to
+    query this info.
     """
     outp = r.run_internal(f'--architecture {arch} --instruction {inst} --detail-instruction')
     found_lines = findall(r"Instruction:.+\n", outp)
@@ -365,7 +400,7 @@ def get_in_bits(r, arch, inst):
         to_ret = int(64)
     elif is_32:
         to_ret = int(32)
-    elif (is_16 or is_odd_16):
+    elif is_16 or is_odd_16:
         to_ret = int(16)
     elif is_8:
         to_ret = int(8)
@@ -376,12 +411,13 @@ def get_in_bits(r, arch, inst):
         sys.exit(-1)
     return to_ret
 
+
 def run_get_register(runner, matrix, M, N, K, B, test_string):
-    """ Runs the --get-register test over a series of I, J, K, and block values for the desired
-        matrix. The test_string is used to pass in most of the line that will run, so it should
-        contain the architecture and instruction at a minimum. This test will take in the M, N,
-        K, and block sizes supported by this instruction, and walk over some of them for the
-        target matrix when running the tests.
+    """Runs the --get-register test over a series of I, J, K, and block values for the desired
+    matrix. The test_string is used to pass in most of the line that will run, so it should
+    contain the architecture and instruction at a minimum. This test will take in the M, N,
+    K, and block sizes supported by this instruction, and walk over some of them for the
+    target matrix when running the tests.
     """
     if matrix in ('A', 'k'):
         row_letter = "-I"
@@ -408,15 +444,15 @@ def run_get_register(runner, matrix, M, N, K, B, test_string):
     # actual "where does something live" calculations are bad, we will likely catch that problem
     # in the register-layout test.
     if max_row > 2:
-        rows = (0, max_row-1)
+        rows = (0, max_row - 1)
     else:
         rows = range(max_row)
     if max_col > 2:
-        cols = (0, max_col-1)
+        cols = (0, max_col - 1)
     else:
         cols = range(max_col)
     if B > 2:
-        blocks = (0, B-1)
+        blocks = (0, B - 1)
     else:
         blocks = range(B)
     for row in rows:
@@ -425,13 +461,15 @@ def run_get_register(runner, matrix, M, N, K, B, test_string):
                 x = f"{test_string} {row_letter} {row} {col_letter} {col} -b {block} {out_calc}"
                 runner.run(x)
 
-def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, max_lane_num,
-                     test_string):
-    """ Runs the --matrix-entry test over a series of registers and lanes on a particular matrix.
-        The test_string is used to pass in most of the line that will run, so it should contain
-        the architecture and instruction at a minimum. However, this test will take the A, B, and
-        C/D maximum registers and walk over some of them for the target matrix. Same thing for
-        the available lanes.
+
+def run_matrix_entry(
+    runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, max_lane_num, test_string
+):
+    """Runs the --matrix-entry test over a series of registers and lanes on a particular matrix.
+    The test_string is used to pass in most of the line that will run, so it should contain
+    the architecture and instruction at a minimum. However, this test will take the A, B, and
+    C/D maximum registers and walk over some of them for the target matrix. Same thing for
+    the available lanes.
     """
     if matrix == 'A':
         max_reg_to_use = a_regs
@@ -446,7 +484,7 @@ def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, m
     # matrix-entry calculations. If the actual "where does something live" calculations are bad,
     # we will likely catch that problem in the matrix-layout test.
     if max_reg_to_use > 2:
-        regs_to_use = (0, max_reg_to_use-1)
+        regs_to_use = (0, max_reg_to_use - 1)
     else:
         regs_to_use = range(max_reg_to_use)
 
@@ -466,7 +504,7 @@ def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, m
             lanes_to_use = (16, 31)
         elif blgp == 6:
             lanes_to_use = (43,)
-        else: # blgp == 7
+        else:  # blgp == 7
             lanes_to_use = (63,)
     else:
         lanes_to_use = (0, 7, 15, 16, 27, 31)
@@ -484,18 +522,19 @@ def run_matrix_entry(runner, matrix, a_regs, b_regs, cd_regs, wave_size, blgp, m
         for lane in lanes_to_use_list:
             runner.run(f"{test_string} -r {reg} -l {lane}")
 
+
 def run_parallel_matrix_test_helper(test_name, arch, inst, r):
-    """ Function that will execute a test on all of the options available for  matrix and
-        test type.
-        Available options for the test name, which is the string name of the test to run,
-        are the same as the main tool:
-          - register-layout
-          - matrix-layout
-          - get-register
-          - matrix-entry
-        The next two arguments are the string of the architecture to pass to the tool
-        and the name of the instruction to pass to the tool.
-        The final argument is the TestRunner object
+    """Function that will execute a test on all of the options available for  matrix and
+    test type.
+    Available options for the test name, which is the string name of the test to run,
+    are the same as the main tool:
+      - register-layout
+      - matrix-layout
+      - get-register
+      - matrix-entry
+    The next two arguments are the string of the architecture to pass to the tool
+    and the name of the instruction to pass to the tool.
+    The final argument is the TestRunner object
     """
     # Get parameters we may need for the variety of tests we want to run
     M = get_num(r, arch, inst, "M")
@@ -547,17 +586,17 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                     # supporting an opsel of 0
                     if inst.lower() == "v_swmmac_i32_16x16x64_iu4" and wave == 32:
                         max_k_opsel = 0
-                for neg in range(max_neg+1):
-                    for cbsz in range(max_cbsz+1):
-                        if (is_sparse and max_cbsz != 0):
+                for neg in range(max_neg + 1):
+                    for cbsz in range(max_cbsz + 1):
+                        if is_sparse and max_cbsz != 0:
                             if get_in_bits(r, arch, inst) == 16:
                                 max_abid = 3
                             else:
                                 max_abid = 1
                         else:
                             max_abid = int(math.pow(2, int(cbsz)) - 1)
-                        for abid in range(max_abid+1):
-                            for opsel in range(max_k_opsel+1):
+                        for abid in range(max_abid + 1):
+                            for opsel in range(max_k_opsel + 1):
                                 test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} "
                                 test_string += f"--cbsz {cbsz} --abid {abid} --neg {neg} "
                                 test_string += f"--neg_hi {neg} --opsel {opsel} -w {wave} "
@@ -572,15 +611,24 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                                 elif test_name == "get-register":
                                     run_get_register(r, matrix, M, N, K, B, test_string)
                                 elif test_name == "matrix-entry":
-                                    run_matrix_entry(r, matrix, a_regs, b_regs, cd_regs, wave, 0,
-                                                     max_lane_num, test_string)
+                                    run_matrix_entry(
+                                        r,
+                                        matrix,
+                                        a_regs,
+                                        b_regs,
+                                        cd_regs,
+                                        wave,
+                                        0,
+                                        max_lane_num,
+                                        test_string,
+                                    )
                                 else:
                                     print(f"Unknown test name {test_name}")
                                     sys.exit(-1)
                                 num_done += 1
             elif matrix == 'B':
-                for neg in range(max_neg+1):
-                    for blgp in range(max_blgp+1):
+                for neg in range(max_neg + 1):
+                    for blgp in range(max_blgp + 1):
                         test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} --blgp {blgp} "
                         test_string += f"--neg {neg} --neg_hi {neg} -w {wave} "
                         if test_name in ("register-layout", "matrix-layout"):
@@ -594,8 +642,17 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                         elif test_name == "get-register":
                             run_get_register(r, matrix, M, N, K, B, test_string)
                         elif test_name == "matrix-entry":
-                            run_matrix_entry(r, matrix, a_regs, b_regs, cd_regs, wave, blgp,
-                                             max_lane_num, test_string)
+                            run_matrix_entry(
+                                r,
+                                matrix,
+                                a_regs,
+                                b_regs,
+                                cd_regs,
+                                wave,
+                                blgp,
+                                max_lane_num,
+                                test_string,
+                            )
                         else:
                             print(f"Unknown test name {test_name}")
                             sys.exit(-1)
@@ -603,7 +660,7 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
             else:
                 if matrix == 'D':
                     max_neg = 0
-                for neg in range(max_neg+1):
+                for neg in range(max_neg + 1):
                     for opsel in opsel_vals:
                         test_string = f"-a {arch} -i {inst} -{matrix} --{test_name} -w {wave} "
                         test_string += f"--opsel {opsel} --neg {max_neg} --neg_hi {max_neg} "
@@ -618,48 +675,59 @@ def run_parallel_matrix_test_helper(test_name, arch, inst, r):
                         elif test_name == "get-register":
                             run_get_register(r, matrix, M, N, K, B, test_string)
                         elif test_name == "matrix-entry":
-                            run_matrix_entry(r, matrix, a_regs, b_regs, cd_regs, wave, 0,
-                                             max_lane_num, test_string)
+                            run_matrix_entry(
+                                r,
+                                matrix,
+                                a_regs,
+                                b_regs,
+                                cd_regs,
+                                wave,
+                                0,
+                                max_lane_num,
+                                test_string,
+                            )
                         else:
                             print(f"Unknown test name {test_name}")
                             sys.exit(-1)
                         num_done += 1
 
+
 def run_parallel_matrix_test(test_app, test_name, arch, inst, temp_file_name):
-    """ Function that will execute a test on all of the options available for  matrix and
-        test type.
-        Available options for the test name, which is the string name of the test to run,
-        are the same as the main tool:
-          - register-layout
-          - matrix-layout
-          - get-register
-          - matrix-entry
-        The final three arguments are the string of the architecture to pass to the tool,
-        the name of the instruction to pass to the tool, and a filename where the output
-        of this test should be stored.
+    """Function that will execute a test on all of the options available for  matrix and
+    test type.
+    Available options for the test name, which is the string name of the test to run,
+    are the same as the main tool:
+      - register-layout
+      - matrix-layout
+      - get-register
+      - matrix-entry
+    The final three arguments are the string of the architecture to pass to the tool,
+    the name of the instruction to pass to the tool, and a filename where the output
+    of this test should be stored.
     """
     # Open tester which will save out all our test output to the desired file
     with TestRunner(test_app, temp_file_name) as r:
         run_parallel_matrix_test_helper(test_name, arch, inst, r)
 
+
 def run_matrix_tests(test_app, temp_dir, test_name, num_jobs):
-    """ Function that will launch off parallel worker threads in order to execute one of the
-        four matrix tests performed by the AMD Matrix Instruction Calculator.
-        Each parallel test will write to its own out put file. This function will pass back
-        a list of those filenames for another function to concatenate them together in
-        order.
-        Takes as arguments:
-          - The filename of the application to test
-          - The directory to put the temporary per-test output files in
-          - The string name of the test to run. Options are the same as the main tool:
-              - register-layout
-              - matrix-layout
-              - get-register
-              - matrix-entry
-          - The maximum number of parallel jobs to run.
-        Saves the output of running all of these tests into files contained in the
-        directory pointed to by temp_dir. Returns a list of the (handle, file_name) of
-        these outputs to the calling function.
+    """Function that will launch off parallel worker threads in order to execute one of the
+    four matrix tests performed by the AMD Matrix Instruction Calculator.
+    Each parallel test will write to its own out put file. This function will pass back
+    a list of those filenames for another function to concatenate them together in
+    order.
+    Takes as arguments:
+      - The filename of the application to test
+      - The directory to put the temporary per-test output files in
+      - The string name of the test to run. Options are the same as the main tool:
+          - register-layout
+          - matrix-layout
+          - get-register
+          - matrix-entry
+      - The maximum number of parallel jobs to run.
+    Saves the output of running all of these tests into files contained in the
+    directory pointed to by temp_dir. Returns a list of the (handle, file_name) of
+    these outputs to the calling function.
     """
     arch_inst_groups = []
     temp_files = []
@@ -670,38 +738,65 @@ def run_matrix_tests(test_app, temp_dir, test_name, num_jobs):
                 temp_file = mkstemp(suffix='.txt', prefix='inst_list_', dir=temp_dir, text=True)
                 arch_inst_groups.append((arch, inst, temp_file[1]))
                 temp_files.append(temp_file)
-        task = (delayed(run_parallel_matrix_test)(test_app, test_name, arch, inst, temp_file)
-                for arch, inst, temp_file in arch_inst_groups)
+        task = (
+            delayed(run_parallel_matrix_test)(test_app, test_name, arch, inst, temp_file)
+            for arch, inst, temp_file in arch_inst_groups
+        )
         Parallel(n_jobs=num_jobs, backend="threading")(task)
     return temp_files
 
+
 def parse_and_run():
-    """ Parse the arguments for this script, then run the requested functions.
-        Print help about the application if requested, or if wrong
-        arguments are passed in. Check to make sure the arguments are valid
-        with respect to one another and give recommendations if they are not.
+    """Parse the arguments for this script, then run the requested functions.
+    Print help about the application if requested, or if wrong
+    arguments are passed in. Check to make sure the arguments are valid
+    with respect to one another and give recommendations if they are not.
     """
     parser = argparse.ArgumentParser(
-                description='\n'.join(
-                    wrap("This tool will run the AMD Matrix Instruction Calculator over many "
-                         "command-line options in order to test application code paths. In an "
-                         "effort to keep test execution time low, it runs tests in parallel "
-                         "and saves their output to temporary files. After all tests have "
-                         "completed successfully, it concatenates the outputs of those tests into "
-                         "a single user-defined file.", 80)),
-                formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-v', '--version', action='store_true',
-                        dest='print_version',
-                        help='Print the version of this tool')
-    parser.add_argument('-o', '--overwrite', action='store_true',
-                        dest='overwrite',
-                        help='Overwrite output file if it already exists.')
-    parser.add_argument('-c', '--cores', action='store',
-                        dest='cores', default='-1', nargs='?',
-                        help="Number of cores on which to run parallel tests. Default: all cores.")
-    parser.add_argument('output_file', metavar='output_file_name', type=str, nargs='?',
-                        default="",
-                        help='Name of the file to used to hold the final tool outputs.')
+        description='\n'.join(
+            wrap(
+                "This tool will run the AMD Matrix Instruction Calculator over many "
+                "command-line options in order to test application code paths. In an "
+                "effort to keep test execution time low, it runs tests in parallel "
+                "and saves their output to temporary files. After all tests have "
+                "completed successfully, it concatenates the outputs of those tests into "
+                "a single user-defined file.",
+                80,
+            )
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        '-v',
+        '--version',
+        action='store_true',
+        dest='print_version',
+        help='Print the version of this tool',
+    )
+    parser.add_argument(
+        '-o',
+        '--overwrite',
+        action='store_true',
+        dest='overwrite',
+        help='Overwrite output file if it already exists.',
+    )
+    parser.add_argument(
+        '-c',
+        '--cores',
+        action='store',
+        dest='cores',
+        default='-1',
+        nargs='?',
+        help="Number of cores on which to run parallel tests. Default: all cores.",
+    )
+    parser.add_argument(
+        'output_file',
+        metavar='output_file_name',
+        type=str,
+        nargs='?',
+        default="",
+        help='Name of the file to used to hold the final tool outputs.',
+    )
     args = parser.parse_args()
 
     if args.print_version:
@@ -714,7 +809,7 @@ def parse_and_run():
         sys.exit(-1)
 
     output_file_path = Path(args.output_file)
-    if (output_file_path.is_file() and not args.overwrite):
+    if output_file_path.is_file() and not args.overwrite:
         print(f"ERROR: {args.output_file} already exists, and --overwrite option was not passed.")
         print("To prevent files from being accidentally overwritten, this tool will exit.")
         sys.exit(-1)
@@ -742,14 +837,22 @@ def parse_and_run():
         files.append(run_good_help_and_version(test_script_path, temp_dir))
         files.append(run_instruction_list(test_script_path, temp_dir))
         files.append(run_detailed_instructions(test_script_path, temp_dir))
-        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
-                                                       "register-layout", cores)]
-        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
-                                                       "matrix-layout", cores)]
-        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
-                                                       "get-register", cores)]
-        _ = [files.append(x) for x in run_matrix_tests(test_script_path, temp_dir,
-                                                       "matrix-entry", cores)]
+        _ = [
+            files.append(x)
+            for x in run_matrix_tests(test_script_path, temp_dir, "register-layout", cores)
+        ]
+        _ = [
+            files.append(x)
+            for x in run_matrix_tests(test_script_path, temp_dir, "matrix-layout", cores)
+        ]
+        _ = [
+            files.append(x)
+            for x in run_matrix_tests(test_script_path, temp_dir, "get-register", cores)
+        ]
+        _ = [
+            files.append(x)
+            for x in run_matrix_tests(test_script_path, temp_dir, "matrix-entry", cores)
+        ]
         # Concatenate output files together
         with open(output_file_path, 'w+', encoding="utf-8") as fout:
             for in_file in files:
@@ -757,6 +860,7 @@ def parse_and_run():
                     copyfileobj(fin, fout)
 
     print("Tests completed.")
+
 
 if __name__ == '__main__':
     parse_and_run()

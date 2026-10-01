@@ -1,0 +1,15 @@
+# Ruff settings, kept consistent with .pylintrc (max-line-length=100, 4-space indents).
+# pylint remains the linter; ruff is only used for formatting and import sorting.
+
+[tool.ruff]
+line-length = 100
+# The tool supports old Python 3 versions; py37 is the oldest target ruff offers.
+target-version = "py37"
+
+[tool.ruff.format]
+# Existing code mixes quote styles and pylint does not enforce one (check-quote-consistency=no).
+quote-style = "preserve"
+
+[tool.ruff.lint]
+# Import sorting only ("ruff check --fix"); all other checks are left to pylint.
+select = ["I"]
