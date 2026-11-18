@@ -4099,23 +4099,16 @@ class InstCalc(metaclass=ABCMeta):
                 b_reg_lane = self.__format_reg_lane(b_reg, b_lane)
                 b_name = self.__neg_abs_name(b_reg, f"Src1_{b_reg_lane}", 'b', negate)
                 to_ret.append(f"{a_name}*{b_name}")
-        ret_string = " + ".join(to_ret)
-        if not inst_info['sparse']:
-            (c_ele, c_reg, c_lanes) = self._get_reg_lanes('c', i, j, k, block, 0, 0, 0, opsel)
-            c_lane = c_lanes[0]
-            if negate['c']:
-                ret_string += " - "
-            else:
-                ret_string += " + "
-            abs_str = ""
-            if negate['c_abs']:
-                abs_str = "|"
-            if find_element:
-                ret_string += f"{abs_str}{c_ele}{abs_str}"
-            else:
-                c_reg_lane = self.__format_reg_lane(c_reg, c_lane)
-                ret_string += f"{abs_str}Src2_{c_reg_lane}{abs_str}"
-        return ret_string
+        # Sparse instructions read the accumulator from the destination itself.
+        accumulator = 'd' if inst_info['sparse'] else 'c'
+        operand, reg, lanes = self._get_reg_lanes(accumulator, i, j, 0, block, 0, 0, 0, opsel)
+        if not find_element:
+            source = "Vdst" if inst_info['sparse'] else "Src2"
+            operand = f"{source}_{self.__format_reg_lane(reg, lanes[0])}"
+        if negate['c_abs']:
+            operand = f"|{operand}|"
+        sign = " - " if negate['c'] else " + "
+        return " + ".join(to_ret) + sign + operand
 
     def calculate_get_register(self, matrix: str, out_calc: bool, negate: Dict[str, bool],
                                i: int, j: int, k: int, block: int, cbsz: int, abid: int,
